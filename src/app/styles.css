@@ -152,6 +152,10 @@ h2 {
   gap: 0.55rem;
 }
 
+.tag-row {
+  margin-top: 0.65rem;
+}
+
 .status-pills {
   justify-content: flex-end;
 }
@@ -320,6 +324,19 @@ h2 {
   background: rgba(255, 253, 248, 0.92);
   box-shadow: 0 18px 40px rgba(38, 49, 45, 0.08);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.study-card-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.card-preview-columns section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
 }
 
 .deck-card:hover,
@@ -701,6 +718,10 @@ h2 {
   width: 100%;
 }
 
+.tag-input-label {
+  margin-top: 0.65rem;
+}
+
 .tag-combobox {
   position: relative;
 }
@@ -917,7 +938,7 @@ h2 {
 }
 
 .card-text {
-  min-height: 3rem;
+  min-height: 1.5rem;
 }
 
 .review-card {

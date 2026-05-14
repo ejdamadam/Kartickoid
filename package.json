@@ -3,10 +3,13 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "homepage": "https://ejdamadam.github.io/Kartickoid/",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@vite-pwa/assets-generator": "^0.2.6",
@@ -20,6 +23,7 @@
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react": "^4.5.0",
+    "gh-pages": "^6.3.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5"
   }

@@ -77,7 +77,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         || card.frontText.toLowerCase().includes(normalizedQuery)
         || card.backText.toLowerCase().includes(normalizedQuery)
         || card.tags.some((tag) => tag.includes(normalizedQuery));
-      const matchesTag = tagFilter.length === 0 || tagFilter.every((tag) => card.tags.includes(tag));
+      const matchesTag = tagFilter.length === 0 || tagFilter.some((tag) => card.tags.includes(tag));
       return matchesText && matchesTag;
     });
   }, [cards, query, tagFilter]);
