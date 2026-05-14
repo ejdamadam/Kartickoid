@@ -1,4 +1,4 @@
-import type { CardSide, EntityId, Media, PendingCardImage } from '../types';
+import type { CardSide, EntityId, Media, PendingCardMedia } from '../types';
 import { createId } from '../utils/id';
 import { nowIso } from '../utils/date';
 
@@ -16,7 +16,7 @@ export async function processImageFile(file: File, cardId: EntityId, deckId: Ent
   };
 }
 
-export async function processImageForCard(file: File, side: CardSide): Promise<PendingCardImage> {
+export async function processImageForCard(file: File, side: CardSide): Promise<PendingCardMedia> {
   if (!file.type.startsWith('image/')) {
     throw new Error('Soubor musí být obrázek.');
   }
@@ -49,6 +49,7 @@ export async function processImageForCard(file: File, side: CardSide): Promise<P
   return {
     id: createId('media'),
     side,
+    type: 'image',
     blob,
     mimeType: blob.type || preferredType,
     name: file.name,

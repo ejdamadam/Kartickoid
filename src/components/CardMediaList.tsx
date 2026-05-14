@@ -14,8 +14,12 @@ export default function CardMediaList({ media, side, onRemove }: CardMediaListPr
   return (
     <div className="media-grid">
       {items.map((item) => (
-        <figure key={item.id} className="media-item">
-          <ObjectImage blob={item.blob} alt={item.name || 'Obrázek kartičky'} />
+        <figure key={item.id} className="media-item" onClick={(e) => e.stopPropagation()}>
+          {item.type === 'audio' ? (
+            <audio src={URL.createObjectURL(item.blob)} controls />
+          ) : (
+            <ObjectImage blob={item.blob} alt={item.name || 'Obrázek kartičky'} />
+          )}
           {onRemove && (
             <button className="tiny-button" onClick={() => onRemove(item.id)} type="button">
               Odebrat

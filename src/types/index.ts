@@ -32,6 +32,8 @@ export interface Card {
   lapses: number;
 }
 
+export type MediaType = 'image' | 'audio';
+
 export interface Media {
   id: EntityId;
   cardId: EntityId;
@@ -39,15 +41,17 @@ export interface Media {
   side: CardSide;
   blob: Blob;
   mimeType: string;
+  type: MediaType;
   name: string;
   createdAt: string;
 }
 
-export interface PendingCardImage {
+export interface PendingCardMedia {
   id: EntityId;
   side: CardSide;
   blob: Blob;
   mimeType: string;
+  type: MediaType;
   name: string;
   createdAt: string;
 }

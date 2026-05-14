@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCardInput, createDeckInput, db } from '../db/database';
+import JSZip from 'jszip';
+import { createCardInput, createDeckInput, db, addMediaToCard } from '../db/database';
 import { importBackupFile } from '../services/exportImport';
 import { previewBulkCards } from '../services/importers/bulkImporter';
 import { parseCsvCards, previewCsvCards } from '../services/importers/csvImporter';
 import { previewMarkdownCards } from '../services/importers/markdownImporter';
+import { importAnkiXml } from '../services/importers/ankiImporter';
 import type { Deck, ImportPreview } from '../types';
 import { nowIso } from '../utils/date';
 import { t } from '../i18n';
@@ -13,7 +15,7 @@ interface ImportPageProps {
   onChanged: () => void;
 }
 
-type ImportTab = 'json' | 'csv' | 'markdown' | 'bulk';
+type ImportTab = 'json' | 'csv' | 'markdown' | 'bulk' | 'anki';
 
 const emptyPreview: ImportPreview = { cards: [], skippedRows: 0, warnings: [] };
 
@@ -119,6 +121,42 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
     }
   }
 
+  async function handleAnki(file?: File) {
+    if (!file || !targetDeckId) return;
+    setError(undefined);
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const xmlFile = Object.values(zip.files).find((f) => f.name.endsWith('.xml'));
+      if (!xmlFile) throw new Error('Nebylo nalezeno žádné XML v ZIPu.');
+      const xmlText = await xmlFile.async('string');
+      
+      const blobs = new Map<string, Blob>();
+      const blobFolder = zip.folder('blobs');
+      if (blobFolder) {
+        for (const [name, file] of Object.entries(blobFolder.files)) {
+          if (!file.dir) {
+            blobs.set(name.replace('blobs/', ''), await file.async('blob'));
+          }
+        }
+      }
+
+      const result = await importAnkiXml(xmlText, blobs);
+      for (const entry of result.cards) {
+        const newCard = { ...entry.card, deckId: targetDeckId };
+        const id = await db.cards.add(newCard);
+        for (const media of entry.media) {
+             await addMediaToCard({ ...media, cardId: id, deckId: targetDeckId });
+        }
+      }
+      
+      await db.decks.update(targetDeckId, { updatedAt: nowIso() });
+      setMessage(`Importováno ${result.cards.length} karet.`);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
   return (
     <section className="page">
       <button className="back-button" onClick={onBack}>← {t.common.back}</button>
@@ -132,8 +170,8 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
       </div>
 
       <div className="mode-tabs import-tabs">
-        {(['json', 'csv', 'markdown', 'bulk'] as ImportTab[]).map((item) => (
-          <button className={tab === item ? 'active' : ''} key={item} onClick={() => setTab(item)}>{t.import[item]}</button>
+        {(['json', 'csv', 'markdown', 'bulk', 'anki'] as ImportTab[]).map((item) => (
+          <button className={tab === item ? 'active' : ''} key={item} onClick={() => setTab(item)}>{t.import[item] ?? item.toUpperCase()}</button>
         ))}
       </div>
 
@@ -207,6 +245,17 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
           <button className="primary-button" disabled={!targetDeckId || bulkPreview.cards.filter((card) => card.errors.length === 0).length === 0} onClick={importBulk}>
             {t.import.createCards}
           </button>
+        </section>
+      )}
+      
+      {tab === 'anki' && (
+        <section className="panel">
+          <h2>{'Import Anki (.zip)'}</h2>
+          <p>{'Nahrajte ZIP balíček z Anki (obsahující .xml a složku blobs).'}</p>
+          <label className="upload-button wide">
+            {'Vybrat ZIP'}
+            <input type="file" accept=".zip" onChange={(event) => handleAnki(event.target.files?.[0])} />
+          </label>
         </section>
       )}
     </section>

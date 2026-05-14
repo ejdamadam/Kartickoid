@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
+import { motion, useMotionValue, useTransform, type PanInfo, AnimatePresence } from 'framer-motion';
 import CardMediaList from '../components/CardMediaList';
 import { db } from '../db/database';
 import { ratingLabels, scheduleCard } from '../services/scheduler';
@@ -44,6 +44,8 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
   const [mistakeIds, setMistakeIds] = useState<string[]>([]);
   const [error, setError] = useState<string>();
 
+  const [limit, setLimit] = useState<number>(0); // 0 means 'all'
+
   useEffect(() => {
     let active = true;
     Promise.all([
@@ -56,7 +58,11 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
         if (!active) return;
         setDeck(nextDeck);
         setAllCards(deckCards);
-        setQueue(sessionCards);
+        
+        // Apply limit if specified
+        const finalQueue = limit > 0 ? sessionCards.slice(0, limit) : sessionCards;
+        setQueue(finalQueue);
+        
         setMedia(allMedia.filter((item) => deckCards.some((card) => card.id === item.cardId)));
         setIndex(0);
         setCompleted(0);
@@ -67,7 +73,7 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
     return () => {
       active = false;
     };
-  }, [deckId, source, sessionKey]);
+  }, [deckId, source, sessionKey, limit]);
 
   const dueCount = useMemo(() => {
     const now = new Date();
@@ -125,16 +131,13 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
 
   return (
     <section className="study-page mobile-study">
-      <button className="back-button" onClick={onBack}>← {t.common.back}</button>
-      <div className="study-header">
-        <div>
-          <p className="eyebrow">{t.study.title}</p>
-          <h1>{deck?.name ?? t.deck.label}</h1>
-        </div>
+      <button className="minimal-back" onClick={onBack} aria-label={t.common.back}>×</button>
+      <div className="study-header-compact">
+        <h1>{deck?.name ?? t.deck.label}</h1>
         <span className="pill pill-muted">{queue.length === 0 ? 0 : Math.min(index + 1, queue.length)} / {queue.length}</span>
       </div>
 
-      <div className="mode-tabs" role="tablist" aria-label={t.study.title}>
+      <div className="mode-tabs compact-tabs" role="tablist" aria-label={t.study.title}>
         {(Object.keys(modeLabels) as StudyMode[]).map((item) => (
           <button className={mode === item ? 'active' : ''} key={item} onClick={() => setMode(item)}>
             {modeLabels[item]}
@@ -144,46 +147,63 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
 
       {error && <p className="error-box">{error}</p>}
 
-      {!currentCard ? (
-        <SessionEmpty
-          total={allCards.length}
-          dueCount={dueCount}
-          completed={completed}
-          mistakes={mistakeIds.length}
-          onBack={onBack}
-          onStart={startSession}
-          onRetryMistakes={retryMistakes}
-        />
-      ) : (
-        <>
-          {mode === 'learning' && (
-            <LearningCard
-              card={currentCard}
-              media={currentMedia}
-              revealed={revealed}
-              onFlip={() => setRevealed((value) => !value)}
-              onRate={rate}
+      <AnimatePresence mode="wait">
+        {!currentCard ? (
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0, scale: 0.94 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.94 }}
+          >
+            <SessionEmpty
+              total={allCards.length}
+              dueCount={dueCount}
+              completed={completed}
+              mistakes={mistakeIds.length}
+              limit={limit}
+              setLimit={setLimit}
+              onBack={onBack}
+              onStart={startSession}
+              onRetryMistakes={retryMistakes}
             />
-          )}
-          {mode === 'test' && (
-            <TestMode
-              card={currentCard}
-              media={media}
-              allCards={allCards}
-              onRate={rate}
-              onShowDetail={() => setRevealed(true)}
-              revealed={revealed}
-            />
-          )}
-          {mode === 'writing' && (
-            <WritingMode
-              card={currentCard}
-              media={currentMedia}
-              onRate={rate}
-            />
-          )}
-        </>
-      )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key={currentCard.id}
+            initial={{ opacity: 0, scale: 0.88, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 1.05, y: -20 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30, opacity: { duration: 0.2 } }}
+          >
+            {mode === 'learning' && (
+              <LearningCard
+                card={currentCard}
+                media={currentMedia}
+                revealed={revealed}
+                onFlip={() => setRevealed((value) => !value)}
+                onRate={rate}
+              />
+            )}
+            {mode === 'test' && (
+              <TestMode
+                card={currentCard}
+                media={media}
+                allCards={allCards}
+                onRate={rate}
+                onShowDetail={() => setRevealed(true)}
+                revealed={revealed}
+              />
+            )}
+            {mode === 'writing' && (
+              <WritingMode
+                card={currentCard}
+                media={currentMedia}
+                onRate={rate}
+              />
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
@@ -198,10 +218,10 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-220, 0, 220], [-10, 0, 10]);
-  const goodOpacity = useTransform(x, [32, 150], [0, 1]);
-  const againOpacity = useTransform(x, [-150, -32], [1, 0]);
-  const easyOpacity = useTransform(y, [-150, -32], [1, 0]);
-  const hardOpacity = useTransform(y, [32, 150], [0, 1]);
+  const goodOpacity = useTransform(x, [18, 100], [0, 1]);
+  const againOpacity = useTransform(x, [-100, -18], [1, 0]);
+  const easyOpacity = useTransform(y, [-100, -18], [1, 0]);
+  const hardOpacity = useTransform(y, [18, 100], [0, 1]);
 
   function onDragEnd(_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     const { offset, velocity } = info;
@@ -218,6 +238,14 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
     }
   }
 
+  function handleTap(event: any, info: any) {
+    // Check if the tap target is inside an audio element or control
+    if (event.target.closest('audio') || event.target.closest('button')) {
+      return;
+    }
+    onFlip();
+  }
+
   return (
     <div className="learning-shell">
       <motion.article
@@ -227,11 +255,8 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
         dragElastic={0.22}
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         whileTap={{ scale: 0.985 }}
-        onTap={onFlip}
+        onTap={handleTap}
         onDragEnd={onDragEnd}
-        initial={{ opacity: 0, y: 24, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 25 }}
       >
         <motion.div className="swipe-indicator good" style={{ opacity: goodOpacity }}>{t.study.good}</motion.div>
         <motion.div className="swipe-indicator again" style={{ opacity: againOpacity }}>{t.study.again}</motion.div>
@@ -244,8 +269,6 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
           <CardMediaList media={media} side={revealed ? 'back' : 'front'} />
         </div>
       </motion.article>
-      <p className="gesture-hint">{t.study.hint}</p>
-      <RatingButtons onRate={onRate} />
     </div>
   );
 }
@@ -276,6 +299,13 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
     onRate(correct ? 'good' : 'again');
     setSelectedId(undefined);
   }
+
+  useEffect(() => {
+    if (answered && correct) {
+      const timer = window.setTimeout(next, 800);
+      return () => window.clearTimeout(timer);
+    }
+  }, [answered, correct]);
 
   return (
     <article className="mode-panel">
@@ -382,11 +412,13 @@ function WritingMode({ card, media, onRate }: {
   );
 }
 
-function SessionEmpty({ total, dueCount, completed, mistakes, onBack, onStart, onRetryMistakes }: {
+function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, onBack, onStart, onRetryMistakes }: {
   total: number;
   dueCount: number;
   completed: number;
   mistakes: number;
+  limit: number;
+  setLimit: (limit: number) => void;
   onBack: () => void;
   onStart: (source: StudySessionSource, mode?: StudyMode) => void;
   onRetryMistakes: () => void;
@@ -395,6 +427,22 @@ function SessionEmpty({ total, dueCount, completed, mistakes, onBack, onStart, o
     <div className="study-done modern-empty">
       <h2>{dueCount === 0 ? t.study.allDoneTitle : t.study.sessionDoneTitle}</h2>
       <p>{t.study.cardsDone}: {completed} · {t.study.inDeck}: {total} · {t.study.dueNow}: {dueCount}</p>
+      
+      <div className="limit-selector">
+        <p className="side-label">Karet v session</p>
+        <div className="segmented">
+          {[10, 20, 50, 0].map((val) => (
+            <button 
+              key={val} 
+              className={limit === val ? 'active' : ''} 
+              onClick={() => setLimit(val)}
+            >
+              {val === 0 ? 'Vše' : val}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="session-actions">
         <button className="primary-button" onClick={() => onStart('all')}>{sourceLabels.all}</button>
         <button className="secondary-button" onClick={() => onStart('lapsed')}>{sourceLabels.lapsed}</button>

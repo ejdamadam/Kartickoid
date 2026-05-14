@@ -160,6 +160,7 @@ export const cs = {
     csv: 'CSV',
     markdown: 'Markdown',
     bulk: 'Hromadně',
+    anki: 'Anki ZIP',
     targetDeck: 'Cílový balíček',
     chooseDeck: 'Vybrat balíček',
     jsonTitle: 'Import JSON zálohy',

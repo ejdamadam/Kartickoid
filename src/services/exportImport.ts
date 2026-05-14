@@ -130,10 +130,11 @@ export async function importBackupFile(file: File): Promise<{ decks: number; car
     cardId: cardMap.get(item.cardId) ?? item.cardId,
     deckId: deckMap.get(item.deckId) ?? item.deckId,
     side: item.side,
+    type: item.mimeType.startsWith('audio/') ? 'audio' : 'image',
     blob: dataUrlToBlob(item.dataUrl),
     mimeType: item.mimeType,
     name: item.name,
-    createdAt: item.createdAt || nowIso()
+    createdAt: item.createdAt ?? nowIso()
   })));
 
   const reviewLogs: ReviewLog[] = parsed.reviewLogs.map((log) => ({

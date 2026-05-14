@@ -4,7 +4,7 @@ import CardForm, { type CardFormValues } from '../components/CardForm';
 import CardMediaList from '../components/CardMediaList';
 import Modal from '../components/Modal';
 import { addMediaToCard, createCardInput, db, deleteCardCascade, removeMediaFromCard } from '../db/database';
-import { processImageFile } from '../services/imageProcessing';
+import { processMediaForCard } from '../services/mediaProcessing';
 import { cardsToCsv } from '../services/exporters/csvExporter';
 import { downloadDeckBackup } from '../services/exportImport';
 import type { Card, CardSide, Deck, Media, ReviewLog } from '../types';
@@ -85,10 +85,15 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   async function saveCard(values: CardFormValues) {
     try {
       if (editingCard === 'new') {
-        const card = createCardInput(deckId, values.frontText, values.backText, values.tags);
-        await db.cards.add(card);
-        for (const image of values.images) {
-          await addMediaToCard({ ...image, cardId: card.id, deckId });
+        if (values.media.length > 0) {
+          for (const item of values.media) {
+            const card = createCardInput(deckId, values.frontText, values.backText, values.tags);
+            await db.cards.add(card);
+            await addMediaToCard({ ...item, cardId: card.id, deckId });
+          }
+        } else {
+          const card = createCardInput(deckId, values.frontText, values.backText, values.tags);
+          await db.cards.add(card);
         }
       } else if (editingCard) {
         await db.cards.update(editingCard.id, {
@@ -97,12 +102,31 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
           tags: values.tags,
           updatedAt: nowIso()
         });
-        for (const image of values.images) {
-          await addMediaToCard({ ...image, cardId: editingCard.id, deckId });
+        for (const item of values.media) {
+          await addMediaToCard({ ...item, cardId: editingCard.id, deckId });
         }
       }
       await db.decks.update(deckId, { updatedAt: nowIso() });
       setEditingCard(undefined);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  async function flipSide(card: Card) {
+    try {
+      await db.cards.update(card.id, {
+        frontText: card.backText,
+        backText: card.frontText,
+        updatedAt: nowIso()
+      });
+      const cardMedia = media.filter((item) => item.cardId === card.id);
+      for (const item of cardMedia) {
+        await db.media.update(item.id, {
+          side: item.side === 'front' ? 'back' : 'front'
+        });
+      }
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
@@ -211,18 +235,18 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
     }
   }
 
-  async function uploadImage(card: Card, side: CardSide, file?: File) {
+  async function uploadMedia(card: Card, side: CardSide, file?: File) {
     if (!file) return;
     try {
-      const item = await processImageFile(file, card.id, deckId, side);
-      await addMediaToCard(item);
+      const item = await processMediaForCard(file, side);
+      await addMediaToCard({ ...item, cardId: card.id, deckId });
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.deck.imageError);
     }
   }
 
-  async function removeImage(mediaId: string) {
+  async function removeMedia(mediaId: string) {
     try {
       await removeMediaFromCard(mediaId);
       onChanged();
@@ -242,11 +266,8 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
 
   return (
     <section className="page">
-      <button className="back-button" onClick={onBack}>← {t.common.back}</button>
-
       <div className="page-heading">
         <div>
-          <p className="eyebrow">{t.deck.label}</p>
           <h1>{deck.name}</h1>
           {deck.description && <p className="lead">{deck.description}</p>}
         </div>
@@ -299,14 +320,14 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
                 <section>
                   <p className="side-label">{t.deck.frontSide}</p>
                   <p className="card-text">{card.frontText || t.deck.imageOnly}</p>
-                  <CardMediaList media={cardMedia} side="front" onRemove={removeImage} />
-                  <ImageUploadButton label={t.deck.addFrontImage} onFile={(file) => uploadImage(card, 'front', file)} />
+                  <CardMediaList media={cardMedia} side="front" onRemove={removeMedia} />
+                  <MediaUploadButtonToolbar card={card} side='front' onUpload={uploadMedia} />
                 </section>
                 <section>
                   <p className="side-label">{t.deck.backSide}</p>
                   <p className="card-text">{card.backText || t.deck.imageOnly}</p>
-                  <CardMediaList media={cardMedia} side="back" onRemove={removeImage} />
-                  <ImageUploadButton label={t.deck.addBackImage} onFile={(file) => uploadImage(card, 'back', file)} />
+                  <CardMediaList media={cardMedia} side="back" onRemove={removeMedia} />
+                  <MediaUploadButtonToolbar card={card} side='back' onUpload={uploadMedia} />
                 </section>
               </div>
               <div className="tag-row">
@@ -314,7 +335,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
               </div>
               <p className="muted">{t.deck.nextReview}: {formatDate(card.dueAt)} · {t.deck.interval} {card.intervalDays} dní · {t.deck.ease} {card.ease}</p>
               <div className="button-row">
-                <button className="secondary-button" onClick={() => setEditingCard(card)}>{t.common.edit}</button>
+                <button className="secondary-button" onClick={() => flipSide(card)}>Prohodit</button><button className="secondary-button" onClick={() => setEditingCard(card)}>{t.common.edit}</button>
                 <button className="danger-button" onClick={() => deleteCard(card)}>{t.common.delete}</button>
               </div>
             </article>
@@ -350,13 +371,22 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   );
 }
 
-function ImageUploadButton({ label, onFile }: { label: string; onFile: (file?: File) => void }) {
+function MediaUploadButtonToolbar({ card, side, onUpload }: { card: Card; side: CardSide, onUpload: (card: Card, side: CardSide, file?: File) => void }) {
   return (
-    <label className="upload-button">
+    <div className="media-upload-toolbar">
+      <MediaUploadButton label={'Obrázek'} accept="image/*" onFile={(file) => onUpload(card, side, file)} />
+      <MediaUploadButton label={'Zvuk'} accept="audio/*" onFile={(file) => onUpload(card, side, file)} />
+    </div>
+  );
+}
+
+function MediaUploadButton({ label, accept, onFile }: { label: string; accept: string; onFile: (file?: File) => void }) {
+  return (
+    <label className="upload-button secondary-button">
       {label}
       <input
         type="file"
-        accept="image/*"
+        accept={accept}
         onChange={(event) => {
           onFile(event.target.files?.[0]);
           event.currentTarget.value = '';

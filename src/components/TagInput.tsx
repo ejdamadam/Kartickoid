@@ -58,10 +58,27 @@ export default function TagInput({ value, suggestions, onChange, label = 'Tagy' 
         {(filteredSuggestions.length > 0 || normalizedDraft) && (
           <div className="tag-suggestions" role="listbox">
             {filteredSuggestions.map((tag) => (
-              <button type="button" key={tag} onClick={() => addTag(tag)}>{tag}</button>
+              <button 
+                type="button" 
+                key={tag} 
+                onMouseDown={(e) => {
+                  e.preventDefault(); // Zabrání ztrátě focusu z inputu
+                  addTag(tag);
+                }}
+              >
+                {tag}
+              </button>
             ))}
             {normalizedDraft && !value.includes(normalizedDraft) && !filteredSuggestions.includes(normalizedDraft) && (
-              <button type="button" onClick={() => addTag(normalizedDraft)}>{t.tags.create(normalizedDraft)}</button>
+              <button 
+                type="button" 
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  addTag(normalizedDraft);
+                }}
+              >
+                {t.tags.create(normalizedDraft)}
+              </button>
             )}
           </div>
         )}
