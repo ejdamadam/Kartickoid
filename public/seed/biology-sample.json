@@ -1,0 +1,80 @@
+{
+  "version": 2,
+  "schemaName": "kartickoid-backup",
+  "source": "kartickoid",
+  "exportedAt": "2026-05-13T00:00:00.000Z",
+  "decks": [
+    {
+      "id": "deck_seed_biology",
+      "name": "Biologie ukázka",
+      "description": "Ukázkový balíček pro režimy Učení, Test a Psaní.",
+      "createdAt": "2026-05-13T00:00:00.000Z",
+      "updatedAt": "2026-05-13T00:00:00.000Z"
+    }
+  ],
+  "cards": [
+    {
+      "id": "card_seed_atp",
+      "deckId": "deck_seed_biology",
+      "frontText": "Co je ATP?",
+      "backText": "Energetická měna buňky.",
+      "imageIds": [],
+      "tags": ["biologie", "biochemie"],
+      "createdAt": "2026-05-13T00:00:00.000Z",
+      "updatedAt": "2026-05-13T00:00:00.000Z",
+      "dueAt": "2026-05-13T00:00:00.000Z",
+      "intervalDays": 0,
+      "ease": 2.5,
+      "repetitions": 0,
+      "lapses": 0
+    },
+    {
+      "id": "card_seed_mito",
+      "deckId": "deck_seed_biology",
+      "frontText": "Co produkují mitochondrie?",
+      "backText": "ATP pomocí buněčného dýchání.",
+      "imageIds": [],
+      "tags": ["biologie", "buňka"],
+      "createdAt": "2026-05-13T00:00:00.000Z",
+      "updatedAt": "2026-05-13T00:00:00.000Z",
+      "dueAt": "2026-05-13T00:00:00.000Z",
+      "intervalDays": 0,
+      "ease": 2.5,
+      "repetitions": 0,
+      "lapses": 0
+    },
+    {
+      "id": "card_seed_osmosis",
+      "deckId": "deck_seed_biology",
+      "frontText": "Co je osmóza?",
+      "backText": "Pohyb vody přes polopropustnou membránu.",
+      "imageIds": [],
+      "tags": ["biologie", "membrána"],
+      "createdAt": "2026-05-13T00:00:00.000Z",
+      "updatedAt": "2026-05-13T00:00:00.000Z",
+      "dueAt": "2026-05-13T00:00:00.000Z",
+      "intervalDays": 0,
+      "ease": 2.5,
+      "repetitions": 0,
+      "lapses": 0
+    },
+    {
+      "id": "card_seed_ribosome",
+      "deckId": "deck_seed_biology",
+      "frontText": "Jaká je role ribozomů?",
+      "backText": "Syntéza bílkovin.",
+      "imageIds": [],
+      "tags": ["biologie", "buňka"],
+      "createdAt": "2026-05-13T00:00:00.000Z",
+      "updatedAt": "2026-05-13T00:00:00.000Z",
+      "dueAt": "2026-05-13T00:00:00.000Z",
+      "intervalDays": 0,
+      "ease": 2.5,
+      "repetitions": 0,
+      "lapses": 0
+    }
+  ],
+  "media": [],
+  "reviewLogs": [],
+  "appMeta": []
+}
