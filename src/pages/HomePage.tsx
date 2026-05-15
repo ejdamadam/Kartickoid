@@ -32,16 +32,20 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged }: HomePage
   async function saveDeck(values: { name: string; description: string }) {
     try {
       if (editingDeck === 'new') {
-        await db.decks.add(createDeckInput(values.name, values.description));
+        const deck = createDeckInput(values.name, values.description);
+        const deckId = await db.decks.add(deck);
+        setEditingDeck(undefined);
+        onChanged();
+        onOpenDeck(deckId);
       } else if (editingDeck) {
         await db.decks.update(editingDeck.id, {
           name: values.name.trim(),
           description: values.description.trim(),
           updatedAt: nowIso()
         });
+        setEditingDeck(undefined);
+        onChanged();
       }
-      setEditingDeck(undefined);
-      onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     }
