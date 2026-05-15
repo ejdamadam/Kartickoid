@@ -6,10 +6,14 @@ import './app/styles.css'
 
 // Global error handler for mobile debugging
 window.onerror = function(message, source, lineno, colno, error) {
+  // Ignore cross-origin or empty errors often found in PWA/ServiceWorker loading
+  if (!message && !source) return false;
+  
   const errStr = "Chyba aplikace: " + message + "\nZdroj: " + source + "\nŘádek: " + lineno;
   console.error(errStr, error);
-  // Only alert if we are not on local dev
-  if (!window.location.hostname.includes('localhost')) {
+  
+  // Only alert if the error is significant enough to have a message
+  if (!window.location.hostname.includes('localhost') && message !== 'Script error.') {
     alert(errStr);
   }
   return false;
