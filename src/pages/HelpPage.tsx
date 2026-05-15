@@ -12,58 +12,56 @@ export default function HelpPage({ onBack }: HelpPageProps) {
       
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Nápověda</p>
-          <h1>Jak používat Kartičkoid</h1>
-          <p className="lead">Stručný přehled funkcí a tipů pro efektivní učení.</p>
+          <p className="eyebrow">Dokumentace</p>
+          <h1>Uživatelská příručka</h1>
+          <p className="lead">Technický přehled funkcí, formátů a správy dat v aplikaci Kartičkoid.</p>
         </div>
       </div>
 
       <div className="stack">
         <section className="panel">
-          <h2>🗂️ Správa balíčků</h2>
-          <p>Na hlavní stránce můžete vytvářet nové sady kartiček (balíčky). Každý balíček má svůj název a popis. Balíčky můžete duplikovat, exportovat do formátu JSON pro zálohu nebo do CSV pro tabulkový procesor.</p>
-        </section>
-
-        <section className="panel">
-          <h2>📝 Tvorba kartiček</h2>
-          <p>Při vytváření karty máte k dispozici <strong>WYSIWYG editor</strong>. To znamená, že formátování (tučné písmo, kurzíva, seznamy) vidíte přímo při psaní. Ke každé straně karty (přední i zadní) můžete připojit libovolné množství <strong>obrázků a zvukových stop</strong>.</p>
-        </section>
-
-        <section className="panel">
-          <h2>🔊 Multimédia</h2>
+          <h2>Editor a formátování</h2>
+          <p>Aplikace využívá WYSIWYG editor, který ukládá text ve formátu čistého HTML. Podporovány jsou následující prvky:</p>
           <ul>
-            <li><strong>Obrázky:</strong> Skvělé pro vizuální učení. Klepnutím na obrázek v seznamu otevřete náhled na celou obrazovku.</li>
-            <li><strong>Zvuk:</strong> Umožňuje nahrát výslovnost nebo zvuky (např. zpěv ptáků). V režimu procvičování se zobrazí jednoduchý přehrávač.</li>
+            <li><strong>Tučné písmo a kurzíva:</strong> Standardní značky <code>&lt;b&gt;</code> a <code>&lt;i&gt;</code>.</li>
+            <li><strong>Seznamy:</strong> Struktura <code>&lt;ul&gt;</code> a <code>&lt;li&gt;</code> pro odrážky.</li>
+            <li><strong>Média:</strong> Ke každé straně lze připojit neomezené množství souborů (JPG, PNG, MP3, WAV). Soubory se ukládají jako binární bloby přímo do IndexedDB.</li>
           </ul>
         </section>
 
         <section className="panel">
-          <h2>🧠 Režimy procvičování</h2>
+          <h2>Importy z externích zdrojů</h2>
+          <p>Pro hromadné nahrávání dat zvolte odpovídající formát v záložce Import:</p>
           <ul>
-            <li><strong>Učení:</strong> Klasické otáčení karet. Tažením (swipe) nebo tlačítky hodnotíte obtížnost. Aplikace sama plánuje opakování podle algoritmu SRS.</li>
-            <li><strong>Test:</strong> Výběr z více možností (multiple choice). Pokud nevíte, můžete otázku přeskočit, což se počítá jako chyba.</li>
-            <li><strong>Psaní:</strong> Procvičování přesné formulace. Aplikace využívá <em>fuzzy matching</em>, takže odpustí drobné překlepy, pokud zvolíte "tolerantní" režim.</li>
+            <li><strong>Anki ZIP:</strong> Očekává .zip archiv obsahující jedno .xml se strukturou karet a složku <code>blobs/</code> s mediálními soubory pojmenovanými podle hashů v XML.</li>
+            <li><strong>CSV:</strong> Textový soubor s oddělovačem (čárka/středník). V průvodci namapujte sloupce pro přední stranu, zadní stranu a tagy.</li>
+            <li><strong>Markdown:</strong> Importuje strukturované soubory, kde nadpisy <code>##</code> definují novou kartu.</li>
           </ul>
         </section>
 
         <section className="panel">
-          <h2>📥 Import dat</h2>
-          <p>Kartičkoid podporuje širokou škálu importů:</p>
+          <h2>Algoritmus a plánování</h2>
+          <p>Aplikace používá SRS (Spaced Repetition System) založený na faktoru snadnosti (Ease). </p>
           <ul>
-            <li><strong>JSON:</strong> Kompletní záloha celé databáze.</li>
-            <li><strong>Anki ZIP:</strong> Podpora pro exporty z aplikací Anki (včetně médií a tagů).</li>
-            <li><strong>CSV & Markdown:</strong> Pro rychlý import textových seznamů.</li>
+            <li><strong>Znovu:</strong> Resetuje interval, karta se vrátí do fáze učení.</li>
+            <li><strong>Těžké/Dobré/Snadné:</strong> Upravují Ease faktor a násobí aktuální interval pro výpočet <code>dueAt</code> (příští opakování).</li>
+            <li><strong>Psaní:</strong> Vyžaduje přesnou shodu textu. "Tolerantní" režim využívá Levenshteinovy vzdálenosti pro povolení drobných překlepů.</li>
           </ul>
         </section>
 
         <section className="panel">
-          <h2>⚙️ Nastavení a údržba</h2>
-          <p>V nastavení si můžete vybrat z 16 barevných motivů. Také zde najdete nástroje pro údržbu databáze – smazání nepoužívaných médií nebo staré historie, což ušetří místo ve vašem zařízení.</p>
+          <h2>Správa úložiště a zálohy</h2>
+          <p>Všechna data jsou uložena lokálně v prohlížeči (IndexedDB). Prohlížeč může data smazat při nedostatku místa na disku.</p>
+          <ul>
+            <li><strong>JSON Export:</strong> Jediný způsob kompletní zálohy. Obsahuje kompletní dump databáze včetně médií v Base64 kódování.</li>
+            <li><strong>Údržba:</strong> Funkce "Smazat nepřiřazená média" v nastavení odstraní soubory, jejichž mateřské karty byly smazány.</li>
+            <li><strong>Interval:</strong> Připomínač zálohy v nastavení určuje frekvenci výzvy k exportu (výchozí 7 dní).</li>
+          </ul>
         </section>
 
         <section className="panel">
-          <h2>☁️ Zálohování</h2>
-          <p>Vaše data jsou uložena <strong>pouze ve vašem prohlížeči</strong>. Pro maximální bezpečí doporučujeme pravidelně využívat "Export zálohy". Aplikace vás na to sama upozorní v nastaveném intervalu.</p>
+          <h2>Režim Test</h2>
+          <p>Generuje distraktory (špatné odpovědi) náhodně z ostatních karet v rámci aktuálního balíčku. Tlačítko "Přeskočit" automaticky zaznamená hodnocení "Znovu" a odhalí správnou odpověď pro kontrolu.</p>
         </section>
       </div>
     </section>
