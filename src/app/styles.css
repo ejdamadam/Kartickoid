@@ -1433,4 +1433,8 @@ h2 {
   color: #555;
   padding: 0.5rem;
 }
-.mode-tabs.narrow { max-width: 320px; margin-left: 0; }
+.mode-tabs.narrow { 
+  max-width: 480px; 
+  margin: 0 auto 1.5rem; 
+  grid-template-columns: repeat(2, 1fr);
+}

@@ -3,7 +3,7 @@ import Modal from '../components/Modal';
 import DeckForm from '../components/DeckForm';
 import { createDeckInput, db } from '../db/database';
 import type { Deck, DeckSummary } from '../types';
-import { nowIso } from '../utils/date';
+import { formatDateTime, nowIso } from '../utils/date';
 import { t } from '../i18n';
 
 interface HomePageProps {
@@ -109,6 +109,33 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
       </div>
 
       {error && <p className="error-box">{error}</p>}
+
+      {summaries.length > 0 && (
+        <section className="dashboard-grid">
+          <div className="dashboard-card primary">
+            <div>
+              <p className="eyebrow">{t.home.recentDecks}</p>
+              <strong>{summaries[0].deck.name}</strong>
+              <p className="last-studied">{t.home.lastStudied}: {formatDateTime(summaries[0].lastReviewedAt)}</p>
+            </div>
+            <button className="light-button" onClick={() => onOpenDeck(summaries[0].deck.id)}>{t.home.continue}</button>
+          </div>
+          <div className="dashboard-card">
+            <div>
+              <p className="eyebrow">{t.home.dueCards}</p>
+              <strong>{summaries.reduce((acc, s) => acc + s.dueCount, 0)}</strong>
+            </div>
+            <span>{t.home.cards}</span>
+          </div>
+          <div className="dashboard-card">
+            <div>
+              <p className="eyebrow">{t.home.studiedToday}</p>
+              <strong>{summaries.reduce((acc, s) => acc + s.reviewedToday, 0)}</strong>
+            </div>
+            <span>{t.home.reviewed}</span>
+          </div>
+        </section>
+      )}
 
       <div className="home-search">
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.home.searchPlaceholder} />
