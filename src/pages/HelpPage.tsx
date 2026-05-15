@@ -20,6 +20,15 @@ export default function HelpPage({ onBack }: HelpPageProps) {
 
       <div className="stack">
         <section className="panel">
+          <h2>Stav aplikace</h2>
+          <p>V pravém horním rohu záhlaví uvidíte dva indikátory (tečky):</p>
+          <ul>
+            <li><strong>Levá tečka:</strong> Internetové připojení. Zelená značí, že jste online.</li>
+            <li><strong>Pravá tečka:</strong> Připravenost pro offline. Zelená značí, že aplikace je plně načtena v mezipaměti a bude fungovat i bez signálu.</li>
+          </ul>
+        </section>
+
+        <section className="panel">
           <h2>Editor a formátování</h2>
           <p>Aplikace využívá WYSIWYG editor, který ukládá text ve formátu čistého HTML. Podporovány jsou následující prvky:</p>
           <ul>
