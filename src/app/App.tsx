@@ -100,7 +100,13 @@ export default function App() {
               {modal === 'settings' ? <SettingsModal onClose={() => {
                   window.location.reload();
                   setModal(undefined);
-              }} /> : <p>Kartičkoid v0.42.0</p>}
+              }} /> : (
+                <div className="stack">
+                    <p>Kartičkoid</p>
+                    <p className="muted">Verze: 1.0.5 (Final-Update-Fix)</p>
+                    <p>Vytvořeno s láskou pro Alenku.</p>
+                </div>
+              )}
           </Modal>
       )}
       
