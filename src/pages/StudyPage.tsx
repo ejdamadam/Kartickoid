@@ -45,7 +45,7 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
   const [mistakeIds, setMistakeIds] = useState<string[]>([]);
   const [error, setError] = useState<string>();
 
-  const [limit, setLimit] = useState<number>(0); // 0 means 'all'
+  const [limit, setLimit] = useState<number>(0); 
 
   useEffect(() => {
     let active = true;
@@ -60,7 +60,6 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
         setDeck(nextDeck);
         setAllCards(deckCards);
         
-        // Apply limit if specified
         const finalQueue = limit > 0 ? sessionCards.slice(0, limit) : sessionCards;
         setQueue(finalQueue);
         
@@ -240,7 +239,6 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
   }
 
   function handleTap(event: any, info: any) {
-    // Check if the tap target is inside an audio element or control
     if (event.target.closest('audio') || event.target.closest('button')) {
       return;
     }
@@ -266,7 +264,7 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
 
         <div className="review-side centered">
           <p className="side-label">{revealed ? t.deck.backSide : t.deck.frontSide}</p>
-          <RichTextDisplay content={(revealed ? card.backText : card.frontText)} />
+          <div className="review-text"><RichTextDisplay content={(revealed ? card.backText : card.frontText)} /></div>
           <CardMediaList media={media} side={revealed ? 'back' : 'front'} />
         </div>
       </motion.article>
@@ -312,7 +310,7 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
     <article className="mode-panel">
       <div className="review-side">
         <p className="side-label">{t.study.front}</p>
-        <RichTextDisplay content={card.frontText} />
+        <div className="review-text compact"><RichTextDisplay content={card.frontText} /></div>
         <CardMediaList media={media.filter((item) => item.cardId === card.id)} side="front" />
       </div>
       <div className="choice-grid">
@@ -365,6 +363,21 @@ function WritingMode({ card, media, onRate }: {
   const [answer, setAnswer] = useState('');
   const [strict, setStrict] = useState(false);
   const [result, setResult] = useState<FuzzyResult>();
+  
+  let targetDisplayFront = card.frontText;
+  let targetDisplayBack = card.backText;
+  let targetFrontMedia = media.filter(m => m.side === 'front');
+  let targetBackMedia = media.filter(m => m.side === 'back');
+  let swapped = false;
+
+  if (!targetDisplayBack && targetDisplayFront) {
+      targetDisplayBack = card.frontText;
+      targetDisplayFront = card.backText;
+      targetFrontMedia = media.filter(m => m.side === 'back');
+      targetBackMedia = media.filter(m => m.side === 'front');
+      swapped = true;
+  }
+
   useEffect(() => {
     setAnswer('');
     setResult(undefined);
@@ -372,7 +385,7 @@ function WritingMode({ card, media, onRate }: {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    setResult(compareFuzzy(card.backText , answer, strict));
+    setResult(compareFuzzy(targetDisplayBack, answer, strict));
   }
 
   function next() {
@@ -382,12 +395,16 @@ function WritingMode({ card, media, onRate }: {
     setResult(undefined);
   }
 
+  if (!targetDisplayFront && !targetDisplayBack) {
+      return <article className="mode-panel"><p className="muted">Kartičku nelze v tomto režimu procvičit.</p></article>;
+  }
+
   return (
     <article className="mode-panel">
       <div className="review-side">
         <p className="side-label">{t.study.front}</p>
-        <RichTextDisplay content={card.frontText} />
-        <CardMediaList media={media} side="front" />
+        {targetDisplayFront && <RichTextDisplay content={targetDisplayFront} />}
+        <CardMediaList media={targetFrontMedia} side={swapped ? 'back' : 'front'} />
       </div>
       <div className="segmented">
         <button className={!strict ? 'active' : ''} type="button" onClick={() => setStrict(false)}>{t.study.tolerant}</button>
@@ -405,12 +422,8 @@ function WritingMode({ card, media, onRate }: {
           <div className={result.accepted ? 'success-box' : 'error-box'}>
             {t.study.similarity(result.similarity)} · {result.accepted ? t.study.accepted : t.study.rejected}
           </div>
-          <p><strong>{t.study.back}:</strong> <RichTextDisplay content={card.backText} /></p>
-          <div className="diff-row">
-            {result.diff.map((part, index) => (
-              <span className={`diff-${part.type}`} key={`${part.value}-${index}`}>{part.value}</span>
-            ))}
-          </div>
+          <p><strong>{t.study.back}:</strong> <RichTextDisplay content={targetDisplayBack} /></p>
+          <CardMediaList media={targetBackMedia} side={swapped ? 'front' : 'back'} />
           <button className="primary-button full-width" onClick={next}>{t.common.done}</button>
         </motion.div>
       )}
