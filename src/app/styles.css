@@ -1416,8 +1416,14 @@ h2 {
   align-items: center;
   padding: 0.5rem 1rem;
 }
+.status-container {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  margin-right: 0.5rem;
+}
 .status-indicator {
-  font-size: 1rem;
+  font-size: 0.8rem;
 }
 .status-indicator.online {
   color: #4caf50;
