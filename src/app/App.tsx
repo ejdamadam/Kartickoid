@@ -31,11 +31,20 @@ export default function App() {
 
   useEffect(() => {
     async function checkBackupReminder() {
+        // Wait briefly for initial DB sync or just ensure we don't trigger if meta is undefined
         const meta = await db.appMeta.get('lastBackupAt');
+        
+        // If meta is undefined, it means this is a fresh install or no backup ever made.
+        // Don't spam the user immediately.
+        if (!meta) {
+            await db.appMeta.put({ key: 'lastBackupAt', value: nowIso(), updatedAt: nowIso() });
+            return;
+        }
+
         const intervalMeta = await db.appMeta.get('backupInterval');
         const interval = intervalMeta ? Number(intervalMeta.value) : 7;
 
-        const lastBackup = meta ? new Date(meta.value as string) : new Date(0);
+        const lastBackup = new Date(meta.value as string);
         const limitDate = new Date();
         limitDate.setDate(limitDate.getDate() - interval);
 
@@ -46,7 +55,10 @@ export default function App() {
             }
         }
     }
-    checkBackupReminder();
+    
+    // Add a small delay to allow initial load to settle
+    const timer = setTimeout(checkBackupReminder, 2000);
+    return () => clearTimeout(timer);
   }, []);
 
   const refresh = useCallback(() => setRefreshKey((prev) => prev + 1), []);
