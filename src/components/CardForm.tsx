@@ -134,11 +134,38 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
 }
 
 function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: { side: CardSide, media: PendingCardMedia[], onAdd: any, onRemove: any, onMove: any, onPreview: any }) {
+  const [recording, setRecording] = useState(false);
+  const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
+  const [chunks, setChunks] = useState<Blob[]>([]);
+
+  async function startRecording() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mediaRecorder = new MediaRecorder(stream);
+    setChunks([]);
+    mediaRecorder.ondataavailable = (e) => setChunks((c) => [...c, e.data]);
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      onAdd([new File([blob], 'recording.webm', { type: 'audio/webm' })], side);
+      stream.getTracks().forEach(track => track.stop());
+    };
+    mediaRecorder.start();
+    setRecorder(mediaRecorder);
+    setRecording(true);
+  }
+
+  function stopRecording() {
+    recorder?.stop();
+    setRecording(false);
+  }
+
   return (
     <section className="image-form-section">
       <div className="upload-buttons">
         <label className="upload-button">Obrázek<input type="file" accept="image/*" multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
-        <label className="upload-button">Zvuk<input type="file" accept="audio/*" multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
+        <label className="upload-button">Zvuk<input type="file" accept="audio/*,audio/mp4" multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
+        <button className="upload-button" type="button" onClick={recording ? stopRecording : startRecording} style={{ background: recording ? '#f44336' : '#eee' }}>
+            {recording ? 'Stop' : 'Nahrát zvuk'}
+        </button>
       </div>
       <div className="pending-image-grid">
         {media.map((item, index) => (
