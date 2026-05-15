@@ -106,15 +106,10 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   async function saveCard(values: CardFormValues) {
     try {
       if (editingCard === 'new') {
-        if (values.media.length > 0) {
-          for (const item of values.media) {
-            const card = createCardInput(deckId, values.frontText, values.backText, values.tags);
-            await db.cards.add(card);
-            await addMediaToCard({ ...item, cardId: card.id, deckId });
-          }
-        } else {
-          const card = createCardInput(deckId, values.frontText, values.backText, values.tags);
-          await db.cards.add(card);
+        const card = createCardInput(deckId, values.frontText, values.backText, values.tags);
+        const cardId = await db.cards.add(card);
+        for (const item of values.media) {
+            await addMediaToCard({ ...item, cardId: cardId, deckId });
         }
       } else if (editingCard) {
         await db.cards.update(editingCard.id, {
