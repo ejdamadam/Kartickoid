@@ -44,11 +44,13 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
   const [completed, setCompleted] = useState(0);
   const [mistakeIds, setMistakeIds] = useState<string[]>([]);
   const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(true);
 
   const [limit, setLimit] = useState<number>(0); 
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
     Promise.all([
       db.decks.get(deckId),
       db.cards.where('deckId').equals(deckId).toArray(),
@@ -67,8 +69,14 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
         setIndex(0);
         setCompleted(0);
         setRevealed(false);
+        setLoading(false);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : t.common.error));
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : t.common.error);
+          setLoading(false);
+        }
+      });
 
     return () => {
       active = false;
@@ -127,6 +135,10 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
     setIndex(0);
     setCompleted(0);
     setRevealed(false);
+  }
+
+  if (loading) {
+    return <section className="study-page mobile-study"><p className="muted">Načítám karty...</p></section>;
   }
 
   return (
@@ -290,27 +302,27 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
     return shuffle([card, ...distractors]);
   }, [allCards, card]);
 
-  const selected = options.find((option) => option.id === selectedId);
   const answered = Boolean(selectedId);
   const correct = selectedId === card.id;
   function handleSkip() {
-    onRate("again");
-    setSelectedId(undefined);
+    setSelectedId('SKIPPED');
   }
 
   function next() {
+    const isSkipped = selectedId === 'SKIPPED';
     onRate(correct ? 'good' : 'again');
     setSelectedId(undefined);
   }
 
   useEffect(() => {
     if (answered && correct) {
-      const timer = window.setTimeout(next, 800);
+      const timer = window.setTimeout(next, 1500);
       return () => window.clearTimeout(timer);
     }
   }, [answered, correct]);
 
   const praise = useMemo(() => takeRandom(t.study.praises, 1)[0], [card.id]);
+  const encouragement = useMemo(() => takeRandom(t.study.encouragements, 1)[0], [card.id]);
 
   return (
     <article className="mode-panel">
@@ -340,7 +352,7 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
         <motion.div className={`feedback-box ${correct ? 'success-box' : 'error-box'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           {correct ? praise : (
             <>
-              {t.study.wrong('')}
+              <p>{encouragement}</p>
               <RichTextDisplay content={card.backText} />
             </>
           )}
@@ -399,6 +411,7 @@ function WritingMode({ card, media, onRate }: {
   }
 
   const praise = useMemo(() => takeRandom(t.study.praises, 1)[0], [card.id]);
+  const encouragement = useMemo(() => takeRandom(t.study.encouragements, 1)[0], [card.id]);
 
   if (!targetDisplayFront && !targetDisplayBack) {
       return <article className="mode-panel"><p className="muted">Kartičku nelze v tomto režimu procvičit.</p></article>;
@@ -425,7 +438,12 @@ function WritingMode({ card, media, onRate }: {
       {result && (
         <motion.div className="writing-result" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <div className={result.accepted ? 'success-box' : 'error-box'}>
-            {result.accepted ? praise : t.study.similarity(result.similarity)} · {result.accepted ? '' : t.study.rejected}
+            {result.accepted ? praise : (
+              <>
+                <p>{encouragement}</p>
+                {t.study.similarity(result.similarity)} · {t.study.rejected}
+              </>
+            )}
           </div>
           <p><strong>{t.study.back}:</strong> <RichTextDisplay content={targetDisplayBack} /></p>
           <CardMediaList media={targetBackMedia} side={swapped ? 'front' : 'back'} />
