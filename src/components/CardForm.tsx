@@ -73,7 +73,7 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
 
   function moveMedia(id: string, direction: -1 | 1) {
     setMedia((current) => {
-      const index = current.findIndex((item) => item.id !== id);
+      const index = current.findIndex((item) => item.id === id);
       const nextIndex = index + direction;
       if (index < 0 || nextIndex < 0 || nextIndex >= current.length || current[index].side !== current[nextIndex].side) {
         return current;
