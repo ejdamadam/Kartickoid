@@ -1,5 +1,6 @@
-import { useMemo, useState, type DragEvent, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent, useEffect } from 'react';
 import type { Card, CardSide, PendingCardMedia } from '../types';
+import { db } from '../db/database';
 import { processMediaForCard } from '../services/mediaProcessing';
 import { t } from '../i18n';
 import ObjectImage from './ObjectImage';
@@ -30,6 +31,19 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string>();
   const [preview, setPreview] = useState<PendingCardMedia>();
+
+  useEffect(() => {
+    async function loadCardData() {
+      if (card) {
+        setFrontText(card.frontText);
+        setBackText(card.backText);
+        setTags(card.tags);
+        const existingMedia = await db.media.where('cardId').equals(card.id).toArray();
+        setMedia(existingMedia as PendingCardMedia[]);
+      }
+    }
+    loadCardData();
+  }, [card]);
 
   const hasContent = useMemo(() => (
     Boolean(frontText.trim() || backText.trim() || media.length > 0 || existingMediaCount > 0)

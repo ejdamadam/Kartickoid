@@ -118,8 +118,22 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
           tags: values.tags,
           updatedAt: nowIso()
         });
+
+        const currentMedia = await db.media.where('cardId').equals(editingCard.id).toArray();
+        const submittedMediaIds = new Set(values.media.map(m => m.id));
+
+        // Delete removed media
+        for (const m of currentMedia) {
+            if (!submittedMediaIds.has(m.id)) {
+                await removeMediaFromCard(m.id);
+            }
+        }
+
+        // Add new/updated media
         for (const item of values.media) {
-          await addMediaToCard({ ...item, cardId: editingCard.id, deckId });
+          if (!currentMedia.find(m => m.id === item.id)) {
+            await addMediaToCard({ ...item, cardId: editingCard.id, deckId });
+          }
         }
       }
       await db.decks.update(deckId, { updatedAt: nowIso() });
