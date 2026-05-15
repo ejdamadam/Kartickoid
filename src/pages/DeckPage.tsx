@@ -9,6 +9,7 @@ import { addMediaToCard, createCardInput, db, deleteCardCascade, removeMediaFrom
 import { processMediaForCard } from '../services/mediaProcessing';
 import { cardsToCsv } from '../services/exporters/csvExporter';
 import { downloadDeckBackup } from '../services/exportImport';
+import { getDeckStats, type DeckStats } from '../services/stats';
 import type { Card, CardSide, Deck, Media, ReviewLog } from '../types';
 import { formatDate, nowIso, startOfTodayIso } from '../utils/date';
 import { t } from '../i18n';
@@ -35,6 +36,8 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<'list' | 'stats'>('list');
+  const [deckStats, setDeckStats] = useState<DeckStats>();
 
   useEffect(() => {
     let active = true;
@@ -64,6 +67,12 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
       active = false;
     };
   }, [deckId, refreshKey]);
+
+  useEffect(() => {
+    if (view === 'stats') {
+        getDeckStats(deckId).then(setDeckStats);
+    }
+  }, [deckId, view, refreshKey]);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -130,14 +139,12 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         const currentMedia = await db.media.where('cardId').equals(editingCard.id).toArray();
         const submittedMediaIds = new Set(values.media.map(m => m.id));
 
-        // Delete removed media
         for (const m of currentMedia) {
             if (!submittedMediaIds.has(m.id)) {
                 await removeMediaFromCard(m.id);
             }
         }
 
-        // Add new/updated media
         for (const item of values.media) {
           if (!currentMedia.find(m => m.id === item.id)) {
             await addMediaToCard({ ...item, cardId: editingCard.id, deckId });
@@ -153,14 +160,11 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   }
 
   async function deleteCard(card: Card) {
-    // Scroll position preservation
     const scrollPos = window.scrollY;
     try {
       await deleteCardCascade(card.id);
       await db.decks.update(deckId, { updatedAt: nowIso() });
       onChanged();
-      
-      // Use requestAnimationFrame to restore scroll after the browser reflows
       requestAnimationFrame(() => {
         window.scrollTo(0, scrollPos);
       });
@@ -318,62 +322,106 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         <span><strong>{stats.reviewedToday}</strong> {t.deck.reviewedToday}</span>
       </div>
 
-      <div className="filters">
-        <label>
-          {t.common.search}
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.deck.searchPlaceholder} />
-        </label>
-        <div className="tag-filter-panel" aria-label="Filtr tagů">
-          {allTags.length === 0 ? (
-            <span className="muted">{t.deck.tagsEmpty}</span>
-          ) : allTags.map((tag) => (
-            <button
-              className={`chip ${tagFilter.includes(tag) ? 'selected' : ''}`}
-              type="button"
-              key={tag}
-              onClick={() => toggleTag(tag)}
-            >
-              {tag}
-            </button>
-          ))}
+      <div className="mode-tabs">
+        <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>Kartičky</button>
+        <button className={view === 'stats' ? 'active' : ''} onClick={() => setView('stats')}>Statistika</button>
+      </div>
+
+      {view === 'list' ? (
+        <>
+          <div className="filters">
+            <label>
+              {t.common.search}
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.deck.searchPlaceholder} />
+            </label>
+            <div className="tag-filter-panel" aria-label="Filtr tagů">
+              {allTags.length === 0 ? (
+                <span className="muted">{t.deck.tagsEmpty}</span>
+              ) : allTags.map((tag) => (
+                <button
+                  className={`chip ${tagFilter.includes(tag) ? 'selected' : ''}`}
+                  type="button"
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card-list">
+            {filteredCards.map((card) => {
+              const cardMedia = media.filter((item) => item.cardId === card.id);
+              return (
+                <article className="study-card-preview" key={card.id}>
+                  <div className="card-preview-columns">
+                    <section>
+                      <p className="side-label">{t.deck.frontSide}</p>
+                      <div className="card-text"><RichTextDisplay content={card.frontText} /></div>
+                      <CardMediaList media={cardMedia} side="front" onRemove={removeMedia} />
+                      <MediaUploadButtonToolbar card={card} side='front' onUpload={uploadMedia} />
+                    </section>
+                    <section>
+                      <p className="side-label">{t.deck.backSide}</p>
+                      <div className="card-text"><RichTextDisplay content={card.backText} /></div>
+                      <CardMediaList media={cardMedia} side="back" onRemove={removeMedia} />
+                      <MediaUploadButtonToolbar card={card} side='back' onUpload={uploadMedia} />
+                    </section>
+                  </div>
+                  <div className="tag-row">
+                    {card.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
+                  </div>
+                  <CardStatistics card={card} logs={logs} />
+                  <p className="muted">{t.deck.nextReview}: {formatDate(card.dueAt)}</p>
+                  <div className="button-row">
+                    <button className="secondary-button" onClick={() => flipSide(card)}>Prohodit</button>
+                    <button className="secondary-button" onClick={() => setEditingCard(card)}>{t.common.edit}</button>
+                    <button className="danger-button" onClick={() => deleteCard(card)}>{t.common.delete}</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="deck-stats-view stack">
+          {deckStats ? (
+            <>
+              <section className="panel stack">
+                <h2>Rozdělení obtížnosti</h2>
+                <div className="stats-row">
+                  {Object.entries(deckStats.ratingDistribution).map(([rating, count]) => (
+                    <div key={rating}>
+                      <strong>{count}</strong>
+                      <small style={{ display: 'block' }}>{rating}</small>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="panel stack">
+                <h2>Týdenní aktivita</h2>
+                <div className="mini-graph">
+                  {deckStats.weeklyActivity.map((day) => (
+                    <div className="mini-bar" key={day.label}>
+                      <span style={{ height: `${Math.max(8, (day.count / Math.max(1, ...deckStats.weeklyActivity.map(d => d.count))) * 100)}%` }} />
+                      <small>{day.label}</small>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              
+              <section className="panel">
+                <p>Celkový počet opakování: <strong>{deckStats.totalRepetitions}</strong></p>
+                <p>Průměrná úspěšnost: <strong>{deckStats.successRate} %</strong></p>
+              </section>
+            </>
+          ) : <p>Načítám statistiky...</p>}
         </div>
-      </div>
+      )}
 
-      <div className="card-list">
-        {filteredCards.map((card) => {
-          const cardMedia = media.filter((item) => item.cardId === card.id);
-          return (
-            <article className="study-card-preview" key={card.id}>
-              <div className="card-preview-columns">
-                <section>
-                  <p className="side-label">{t.deck.frontSide}</p>
-                  <div className="card-text"><RichTextDisplay content={card.frontText} /></div>
-                  <CardMediaList media={cardMedia} side="front" onRemove={removeMedia} />
-                  <MediaUploadButtonToolbar card={card} side='front' onUpload={uploadMedia} />
-                </section>
-                <section>
-                  <p className="side-label">{t.deck.backSide}</p>
-                  <div className="card-text"><RichTextDisplay content={card.backText} /></div>
-                  <CardMediaList media={cardMedia} side="back" onRemove={removeMedia} />
-                  <MediaUploadButtonToolbar card={card} side='back' onUpload={uploadMedia} />
-                </section>
-              </div>
-              <div className="tag-row">
-                {card.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
-              </div>
-              <CardStatistics card={card} logs={logs} />
-              <p className="muted">{t.deck.nextReview}: {formatDate(card.dueAt)}</p>
-              <div className="button-row">
-                <button className="secondary-button" onClick={() => flipSide(card)}>Prohodit</button>
-                <button className="secondary-button" onClick={() => setEditingCard(card)}>{t.common.edit}</button>
-                <button className="danger-button" onClick={() => deleteCard(card)}>{t.common.delete}</button>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-
-      {filteredCards.length === 0 && (
+      {filteredCards.length === 0 && view === 'list' && (
         <div className="empty-state">
           <h2>{t.deck.noCardsTitle}</h2>
           <p>{t.deck.noCardsBody}</p>

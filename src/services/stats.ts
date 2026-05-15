@@ -14,6 +14,13 @@ export interface StatsOverview {
   ratingDistribution: Record<string, number>;
 }
 
+export interface DeckStats {
+  ratingDistribution: Record<string, number>;
+  weeklyActivity: Array<{ label: string; count: number }>;
+  successRate: number;
+  totalRepetitions: number;
+}
+
 export async function getStatsOverview(): Promise<StatsOverview> {
   const [cards, logs] = await Promise.all([
     db.cards.toArray(),
@@ -46,6 +53,32 @@ export async function getStatsOverview(): Promise<StatsOverview> {
     weeklyActivity: buildWeeklyActivity(logs),
     recentLogs: logs.slice(0, 8),
     ratingDistribution
+  };
+}
+
+export async function getDeckStats(deckId: string): Promise<DeckStats> {
+  const [cards, logs] = await Promise.all([
+    db.cards.where('deckId').equals(deckId).toArray(),
+    db.reviewLogs.where('deckId').equals(deckId).toArray()
+  ]);
+
+  const ratingDistribution: Record<string, number> = { again: 0, hard: 0, good: 0, easy: 0 };
+  let successful = 0;
+
+  logs.forEach((log) => {
+    ratingDistribution[log.rating] = (ratingDistribution[log.rating] ?? 0) + 1;
+    if (log.rating === 'good' || log.rating === 'easy') {
+      successful += 1;
+    }
+  });
+
+  const totalRepetitions = cards.reduce((acc, card) => acc + card.repetitions, 0);
+
+  return {
+    ratingDistribution,
+    weeklyActivity: buildWeeklyActivity(logs),
+    successRate: logs.length === 0 ? 0 : Math.round((successful / logs.length) * 100),
+    totalRepetitions
   };
 }
 
