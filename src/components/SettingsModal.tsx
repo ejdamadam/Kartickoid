@@ -87,7 +87,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     
     localStorage.setItem('app-theme', JSON.stringify(theme));
     setSelectedTheme(theme.name);
-    // REMOVED window.location.reload() - should update instantly now
+    window.location.reload(); // Reload pro jistotu
   }
 
   async function forceUpdate() {
@@ -105,7 +105,31 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   return (
     <Modal title="Nastavení" onClose={onClose}>
       <div className="stack">
-        {/* ... motivy ... */}
+        <h3>Motiv</h3>
+        <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', padding: '10px 0' }}>
+          {themes.map(t => (
+            <button key={t.name} onClick={() => applyTheme(t)} 
+                style={{ 
+                    background: t.primary, 
+                    width: '45px', 
+                    height: '45px', 
+                    borderRadius: '50%', 
+                    border: selectedTheme === t.name ? '4px solid #aaa' : '2px solid #ddd',
+                    padding: '2px',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s',
+                    boxShadow: selectedTheme === t.name ? '0 0 0 2px #fff' : 'none'
+                }}
+                aria-label={t.name}
+            />
+          ))}
+        </div>
+        
+        <h3>Zálohování</h3>
+        <label>
+            Interval připomenutí (dny):
+            <input type="number" value={interval} onChange={(e) => updateInterval(Number(e.target.value))} min="1" style={{ marginLeft: '10px', width: '80px', padding: '5px' }} />
+        </label>
         
         <h3>Údržba databáze</h3>
         <button className="secondary-button" onClick={purgeOrphanMedia}>Smazat nepřiřazená média</button>
