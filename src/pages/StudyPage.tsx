@@ -293,6 +293,10 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
   const selected = options.find((option) => option.id === selectedId);
   const answered = Boolean(selectedId);
   const correct = selectedId === card.id;
+  function handleSkip() {
+    onRate("again");
+    setSelectedId(undefined);
+  }
 
   function next() {
     onRate(correct ? 'good' : 'again');
@@ -330,8 +334,8 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
           );
         })}
       </div>
-      {answered && (
-        <motion.div className={`feedback-box ${correct ? 'success-box' : 'error-box'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+
+      {answered && (        <motion.div className={`feedback-box ${correct ? 'success-box' : 'error-box'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           {correct ? t.study.correct : (
             <>
               {t.study.wrong('')}
@@ -340,16 +344,13 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
           )}
         </motion.div>
       )}
-      {revealed && (
-        <div className="answer-detail">
-          <p className="side-label">{t.study.cardDetail}</p>
-          <RichTextDisplay content={card.backText} />
-          <CardMediaList media={media.filter((item) => item.cardId === card.id)} side="back" />
-        </div>
-      )}
+      
       <div className="button-row">
-        <button className="primary-button" disabled={!answered} onClick={next}>{t.study.nextQuestion}</button>
-        <button className="secondary-button" onClick={onShowDetail}>{t.study.showDetail}</button>
+        {!answered ? (
+           <button className="secondary-button" onClick={handleSkip}>{'Přeskočit'}</button>
+        ) : (
+           <button className="primary-button" onClick={next}>{t.study.nextQuestion}</button>
+        )}
       </div>
     </article>
   );
