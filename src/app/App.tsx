@@ -5,6 +5,7 @@ import DeckPage from '../pages/DeckPage';
 import StudyPage from '../pages/StudyPage';
 import ImportPage from '../pages/ImportPage';
 import StatsPage from '../pages/StatsPage';
+import HelpPage from '../pages/HelpPage';
 import AppDrawer from '../components/AppDrawer';
 import OfflineStatus from '../components/OfflineStatus';
 import Modal from '../components/Modal';
@@ -19,7 +20,8 @@ type Route =
   | { name: 'deck'; deckId: string }
   | { name: 'study'; deckId: string }
   | { name: 'import' }
-  | { name: 'stats' };
+  | { name: 'stats' }
+  | { name: 'help' };
 
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
@@ -35,7 +37,6 @@ export default function App() {
             const style = document.createElement('style');
             style.id = 'custom-theme-styles';
             
-            // Helper to convert hex to RGB
             const hexToRgb = (hex: string) => {
               const r = parseInt(hex.slice(1, 3), 16);
               const g = parseInt(hex.slice(3, 5), 16);
@@ -86,6 +87,7 @@ export default function App() {
         onImport={() => setRoute({ name: 'import' })}
         onExport={downloadBackup}
         onStats={() => setRoute({ name: 'stats' })}
+        onHelp={() => setRoute({ name: 'help' })}
         onSettings={() => setModal('settings')}
         onAbout={() => setModal('about')}
       />
@@ -155,6 +157,10 @@ export default function App() {
 
             {route.name === 'stats' && (
               <StatsPage onBack={() => setRoute({ name: 'home' })} />
+            )}
+
+            {route.name === 'help' && (
+              <HelpPage onBack={() => setRoute({ name: 'home' })} />
             )}
           </motion.div>
         </AnimatePresence>

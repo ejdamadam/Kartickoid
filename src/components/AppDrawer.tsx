@@ -8,56 +8,50 @@ interface AppDrawerProps {
   onImport: () => void;
   onExport: () => void;
   onStats: () => void;
+  onHelp: () => void;
   onSettings: () => void;
   onAbout: () => void;
 }
 
-export default function AppDrawer({ open, onClose, onHome, onImport, onExport, onStats, onSettings, onAbout }: AppDrawerProps) {
-  if (!open) return null;
-
+export default function AppDrawer({ open, onClose, onHome, onImport, onExport, onStats, onHelp, onSettings, onAbout }: AppDrawerProps) {
   const items = [
     { label: t.nav.home, action: onHome },
+    { label: t.nav.decks, action: onHome },
     { label: t.common.import, action: onImport },
-    { label: t.nav.exportBackup, action: onExport },
+    { label: t.common.export, action: onExport },
     { label: t.common.statistics, action: onStats },
+    { label: 'Návod', action: onHelp },
     { label: t.common.settings, action: onSettings },
-    { label: t.common.about, action: onAbout }
+    { label: t.common.about, action: onAbout },
   ];
 
   return (
-    <div className="drawer-layer">
+    <div className="drawer-layer" style={{ pointerEvents: open ? 'auto' : 'none' }}>
       <motion.button
         className="drawer-backdrop"
-        aria-label={t.common.closeMenu}
-        onClick={onClose}
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
+        animate={{ opacity: open ? 1 : 0 }}
+        onClick={onClose}
+        aria-label={t.common.closeMenu}
       />
       <motion.aside
         className="app-drawer"
         initial={{ x: '-100%' }}
-        animate={{ x: 0 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.18}
-        onDragEnd={(_event, info) => {
-          if (info.offset.x < -80) onClose();
-        }}
+        animate={{ x: open ? '0%' : '-100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       >
-        <div className="drawer-header">
-          <span className="brand-mark">{t.app.mark}</span>
+        <header className="drawer-header">
+          <div className="brand-mark">{t.app.mark}</div>
           <div>
             <strong>{t.app.name}</strong>
-            <p>{t.nav.cleanMainHint}</p>
+            <p>{t.app.localStudy}</p>
           </div>
-        </div>
-        <nav className="drawer-nav" aria-label="Menu">
-          {items.map((item) => (
+        </header>
+
+        <nav className="drawer-nav">
+          {items.map((item, index) => (
             <button
-              type="button"
-              key={item.label}
+              key={`${item.label}-${index}`}
               onClick={() => {
                 item.action();
                 onClose();
