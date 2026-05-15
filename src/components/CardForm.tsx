@@ -4,6 +4,7 @@ import { processMediaForCard } from '../services/mediaProcessing';
 import { t } from '../i18n';
 import ObjectImage from './ObjectImage';
 import TagInput from './TagInput';
+import RichTextEditor from './RichTextEditor';
 
 export interface CardFormValues {
   frontText: string;
@@ -90,134 +91,53 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
 
       <label>
         {t.deck.frontSide}
-        <textarea
-          value={frontText}
-          onChange={(event) => setFrontText(event.target.value)}
-          rows={4}
-          placeholder={t.cardForm.frontPlaceholder}
-          autoFocus
-        />
+        <RichTextEditor content={frontText} onChange={setFrontText} />
       </label>
-      <MediaDropZone
-        side="front"
-        media={media.filter((item) => item.side === 'front')}
-        onAdd={addFiles}
-        onRemove={removeMedia}
-        onMove={moveMedia}
-        onPreview={setPreview}
-      />
+      <MediaDropZone side="front" media={media.filter((i) => i.side === 'front')} onAdd={addFiles} onRemove={removeMedia} onMove={moveMedia} onPreview={setPreview} />
 
       <label>
         {t.deck.backSide}
-        <textarea
-          value={backText}
-          onChange={(event) => setBackText(event.target.value)}
-          rows={4}
-          placeholder={t.cardForm.backPlaceholder}
-        />
+        <RichTextEditor content={backText} onChange={setBackText} />
       </label>
-      <MediaDropZone
-        side="back"
-        media={media.filter((item) => item.side === 'back')}
-        onAdd={addFiles}
-        onRemove={removeMedia}
-        onMove={moveMedia}
-        onPreview={setPreview}
-      />
+      <MediaDropZone side="back" media={media.filter((i) => i.side === 'back')} onAdd={addFiles} onRemove={removeMedia} onMove={moveMedia} onPreview={setPreview} />
 
       <div className="form-section-tags">
         <TagInput value={tags} suggestions={tagSuggestions} onChange={setTags} />
       </div>
 
       <div className="button-row form-actions">
-        <button className="primary-button" disabled={saving || processing} type="submit">
-          {saving ? t.common.saving : t.common.save}
-        </button>
+        <button className="primary-button" type="submit">{saving ? t.common.saving : t.common.save}</button>
         <button className="secondary-button" type="button" onClick={onCancel}>{t.common.cancel}</button>
       </div>
 
       {preview && (
-        <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={t.cardForm.fullscreenPreview} onClick={() => setPreview(undefined)}>
-          <button className="icon-button" type="button" onClick={() => setPreview(undefined)} aria-label={t.common.close}>×</button>
-          {preview.type === 'audio' ? (
-            <audio src={URL.createObjectURL(preview.blob)} controls autoPlay onClick={(e) => e.stopPropagation()} />
-          ) : (
-            <ObjectImage blob={preview.blob} alt={preview.name} />
-          )}
+        <div className="image-lightbox" onClick={() => setPreview(undefined)}>
+          {preview.type === 'audio' ? <audio src={URL.createObjectURL(preview.blob)} controls autoPlay onClick={(e) => e.stopPropagation()} /> : <ObjectImage blob={preview.blob} alt={preview.name} />}
         </div>
       )}
     </form>
   );
 }
 
-function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
-  side: CardSide;
-  media: PendingCardMedia[];
-  onAdd: (files: FileList | File[], side: CardSide) => void;
-  onRemove: (id: string) => void;
-  onMove: (id: string, direction: -1 | 1) => void;
-  onPreview: (media: PendingCardMedia) => void;
-}) {
-  const [dragActive, setDragActive] = useState(false);
-
-  function onDrop(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    setDragActive(false);
-    onAdd(event.dataTransfer.files, side);
-  }
-
+function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: { side: CardSide, media: PendingCardMedia[], onAdd: any, onRemove: any, onMove: any, onPreview: any }) {
   return (
     <section className="image-form-section">
       <div className="upload-buttons">
-        <label className={`upload-button ${dragActive ? 'active' : ''}`}>
-          {'Obrázek'}
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(event) => {
-              if (event.target.files) onAdd(event.target.files, side);
-              event.currentTarget.value = '';
-            }}
-          />
-        </label>
-        <label className={`upload-button ${dragActive ? 'active' : ''}`}>
-          {'Zvuk'}
-          <input
-            type="file"
-            accept="audio/*"
-            multiple
-            onChange={(event) => {
-              if (event.target.files) onAdd(event.target.files, side);
-              event.currentTarget.value = '';
-            }}
-          />
-        </label>
+        <label className="upload-button">Obrázek<input type="file" accept="image/*" multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
+        <label className="upload-button">Zvuk<input type="file" accept="audio/*" multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
       </div>
-
-      {media.length > 0 ? (
-        <div className="pending-image-grid">
-          {media.map((item, index) => (
-            <figure className="pending-image" key={item.id}>
-              <button type="button" onClick={() => onPreview(item)} aria-label={t.cardForm.fullscreenPreview}>
-                {item.type === 'audio' ? (
-                  <div className="audio-preview-icon" style={{ fontSize: '1.5rem' }}>🎵</div>
-                ) : (
-                  <ObjectImage blob={item.blob} alt={item.name} />
-                )}
-              </button>
-              <figcaption>{item.name}</figcaption>
-              <div className="image-actions">
-                <button type="button" className="tiny-button" onClick={() => onMove(item.id, -1)} disabled={index === 0}>{t.common.moveLeft}</button>
-                <button type="button" className="tiny-button" onClick={() => onMove(item.id, 1)} disabled={index === media.length - 1}>{t.common.moveRight}</button>
-                <button type="button" className="tiny-button" onClick={() => onRemove(item.id)}>{t.common.remove}</button>
-              </div>
-            </figure>
-          ))}
-        </div>
-      ) : (
-        <p className="muted">{'No media'}</p>
-      )}
+      <div className="pending-image-grid">
+        {media.map((item, index) => (
+          <figure className="pending-image" key={item.id}>
+            <button type="button" onClick={() => onPreview(item)}>{item.type === 'audio' ? '🎵' : <ObjectImage blob={item.blob} alt={item.name} />}</button>
+            <div className="image-actions">
+              <button type="button" className="tiny-button" onClick={() => onMove(item.id, -1)} disabled={index === 0}>←</button>
+              <button type="button" className="tiny-button" onClick={() => onMove(item.id, 1)} disabled={index === media.length - 1}>→</button>
+              <button type="button" className="tiny-button" onClick={() => onRemove(item.id)}>X</button>
+            </div>
+          </figure>
+        ))}
+      </div>
     </section>
   );
 }

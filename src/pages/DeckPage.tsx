@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import BulkEditor from '../components/BulkEditor';
 import CardForm, { type CardFormValues } from '../components/CardForm';
 import CardMediaList from '../components/CardMediaList';
+import RichTextDisplay from '../components/RichTextDisplay';
 import Modal from '../components/Modal';
 import { addMediaToCard, createCardInput, db, deleteCardCascade, removeMediaFromCard } from '../db/database';
 import { processMediaForCard } from '../services/mediaProcessing';
@@ -319,13 +320,13 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
               <div className="card-preview-columns">
                 <section>
                   <p className="side-label">{t.deck.frontSide}</p>
-                  <p className="card-text">{card.frontText || t.deck.imageOnly}</p>
+                  <div className="card-text"><RichTextDisplay content={card.frontText} /></div>
                   <CardMediaList media={cardMedia} side="front" onRemove={removeMedia} />
                   <MediaUploadButtonToolbar card={card} side='front' onUpload={uploadMedia} />
                 </section>
                 <section>
                   <p className="side-label">{t.deck.backSide}</p>
-                  <p className="card-text">{card.backText || t.deck.imageOnly}</p>
+                  <div className="card-text"><RichTextDisplay content={card.backText} /></div>
                   <CardMediaList media={cardMedia} side="back" onRemove={removeMedia} />
                   <MediaUploadButtonToolbar card={card} side='back' onUpload={uploadMedia} />
                 </section>

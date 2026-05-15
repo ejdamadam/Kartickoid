@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo, AnimatePresence } from 'framer-motion';
+import RichTextDisplay from '../components/RichTextDisplay';
 import CardMediaList from '../components/CardMediaList';
 import { db } from '../db/database';
 import { ratingLabels, scheduleCard } from '../services/scheduler';
@@ -265,7 +266,7 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
 
         <div className="review-side centered">
           <p className="side-label">{revealed ? t.deck.backSide : t.deck.frontSide}</p>
-          <p className="review-text">{(revealed ? card.backText : card.frontText) || t.deck.imageOnly}</p>
+          <RichTextDisplay content={(revealed ? card.backText : card.frontText)} />
           <CardMediaList media={media} side={revealed ? 'back' : 'front'} />
         </div>
       </motion.article>
@@ -311,7 +312,7 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
     <article className="mode-panel">
       <div className="review-side">
         <p className="side-label">{t.study.front}</p>
-        <p className="review-text compact">{card.frontText || t.deck.imageOnly}</p>
+        <RichTextDisplay content={card.frontText} />
         <CardMediaList media={media.filter((item) => item.cardId === card.id)} side="front" />
       </div>
       <div className="choice-grid">
@@ -325,7 +326,7 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
               key={option.id}
               onClick={() => setSelectedId(option.id)}
             >
-              <span>{option.backText || t.deck.imageOnly}</span>
+              <span>{option.backText }</span>
               <CardMediaList media={optionMedia} side="back" />
             </button>
           );
@@ -333,13 +334,13 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
       </div>
       {answered && (
         <motion.div className={`feedback-box ${correct ? 'success-box' : 'error-box'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          {correct ? t.study.correct : t.study.wrong(card.backText || t.deck.imageOnly)}
+          {correct ? t.study.correct : t.study.wrong(card.backText )}
         </motion.div>
       )}
       {revealed && (
         <div className="answer-detail">
           <p className="side-label">{t.study.cardDetail}</p>
-          <p>{card.backText || t.deck.imageOnly}</p>
+          <RichTextDisplay content={card.backText} />
           <CardMediaList media={media.filter((item) => item.cardId === card.id)} side="back" />
         </div>
       )}
@@ -366,7 +367,7 @@ function WritingMode({ card, media, onRate }: {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    setResult(compareFuzzy(card.backText || t.deck.imageOnly, answer, strict));
+    setResult(compareFuzzy(card.backText , answer, strict));
   }
 
   function next() {
@@ -380,7 +381,7 @@ function WritingMode({ card, media, onRate }: {
     <article className="mode-panel">
       <div className="review-side">
         <p className="side-label">{t.study.front}</p>
-        <p className="review-text compact">{card.frontText || t.deck.imageOnly}</p>
+        <RichTextDisplay content={card.frontText} />
         <CardMediaList media={media} side="front" />
       </div>
       <div className="segmented">
@@ -399,7 +400,7 @@ function WritingMode({ card, media, onRate }: {
           <div className={result.accepted ? 'success-box' : 'error-box'}>
             {t.study.similarity(result.similarity)} · {result.accepted ? t.study.accepted : t.study.rejected}
           </div>
-          <p><strong>{t.study.back}:</strong> {card.backText || t.deck.imageOnly}</p>
+          <p><strong>{t.study.back}:</strong> <RichTextDisplay content={card.backText} /></p>
           <div className="diff-row">
             {result.diff.map((part, index) => (
               <span className={`diff-${part.type}`} key={`${part.value}-${index}`}>{part.value}</span>

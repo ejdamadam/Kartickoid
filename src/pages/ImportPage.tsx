@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import JSZip from 'jszip';
 import { createCardInput, createDeckInput, db, addMediaToCard } from '../db/database';
 import { importBackupFile } from '../services/exportImport';
-import { previewBulkCards } from '../services/importers/bulkImporter';
-import { parseCsvCards, previewCsvCards } from '../services/importers/csvImporter';
+import { previewCsvCards, parseCsvCards } from '../services/importers/csvImporter';
 import { previewMarkdownCards } from '../services/importers/markdownImporter';
 import { importAnkiXml } from '../services/importers/ankiImporter';
-import type { Deck, ImportPreview } from '../types';
+import type { Deck, ImportPreview, PendingCardMedia, Card } from '../types';
 import { nowIso } from '../utils/date';
 import { t } from '../i18n';
 
@@ -15,7 +14,7 @@ interface ImportPageProps {
   onChanged: () => void;
 }
 
-type ImportTab = 'json' | 'csv' | 'markdown' | 'bulk' | 'anki';
+type ImportTab = 'json' | 'csv' | 'markdown' | 'anki';
 
 const emptyPreview: ImportPreview = { cards: [], skippedRows: 0, warnings: [] };
 
@@ -29,7 +28,8 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
   const [csvFileName, setCsvFileName] = useState('');
   const [csvMapping, setCsvMapping] = useState({ front: 'front', back: 'back', tags: 'tags', image: 'image' });
   const [markdownText, setMarkdownText] = useState('');
-  const [bulkText, setBulkText] = useState('Otázka :: Odpověď :: tagy\nATP :: Energetická měna buňky :: biologie,buňka');
+  const [ankiData, setAnkiData] = useState<{ card: Card, media: PendingCardMedia[] }[]>([]);
+  const [zipFileName, setZipFileName] = useState('');
 
   useEffect(() => {
     loadDecks();
@@ -47,7 +47,6 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
 
   const csvPreview = useMemo(() => csvText ? previewCsvCards(csvText, csvMapping) : emptyPreview, [csvText, csvMapping]);
   const markdownPreview = useMemo(() => markdownText ? previewMarkdownCards(markdownText) : { deckName: undefined, preview: emptyPreview }, [markdownText]);
-  const bulkPreview = useMemo(() => bulkText ? previewBulkCards(bulkText) : emptyPreview, [bulkText]);
 
   async function handleJson(file?: File) {
     if (!file) return;
@@ -105,25 +104,10 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
     }
   }
 
-  async function importBulk() {
-    if (!targetDeckId) return;
+  async function handleAnkiPreview(file?: File) {
+    if (!file) return;
     setError(undefined);
-    try {
-      const cards = bulkPreview.cards
-        .filter((card) => card.errors.length === 0)
-        .map((card) => createCardInput(targetDeckId, card.frontText, card.backText, card.tags));
-      await db.cards.bulkAdd(cards);
-      await db.decks.update(targetDeckId, { updatedAt: nowIso() });
-      setMessage(t.import.importedBulk(cards.length));
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.common.error);
-    }
-  }
-
-  async function handleAnki(file?: File) {
-    if (!file || !targetDeckId) return;
-    setError(undefined);
+    setZipFileName(file.name.replace('.zip', ''));
     try {
       const zip = await JSZip.loadAsync(file);
       const xmlFile = Object.values(zip.files).find((f) => f.name.endsWith('.xml'));
@@ -141,16 +125,36 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
       }
 
       const result = await importAnkiXml(xmlText, blobs);
-      for (const entry of result.cards) {
-        const newCard = { ...entry.card, deckId: targetDeckId };
+      setAnkiData(result.cards);
+      setMessage(`Načteno ${result.cards.length} karet z Anki.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  async function executeAnkiImport(createNewDeck: boolean) {
+    try {
+      let deckId = targetDeckId;
+      if (createNewDeck) {
+        const deck = createDeckInput(zipFileName, 'Importováno z Anki');
+        await db.decks.add(deck);
+        deckId = deck.id;
+        await loadDecks();
+      }
+      
+      if (!deckId) throw new Error('Vyberte balíček nebo vytvořte nový.');
+      
+      for (const entry of ankiData) {
+        const newCard = { ...entry.card, deckId: deckId };
         const id = await db.cards.add(newCard);
         for (const media of entry.media) {
-             await addMediaToCard({ ...media, cardId: id, deckId: targetDeckId });
+             await addMediaToCard({ ...media, cardId: id, deckId: deckId });
         }
       }
       
-      await db.decks.update(targetDeckId, { updatedAt: nowIso() });
-      setMessage(`Importováno ${result.cards.length} karet.`);
+      await db.decks.update(deckId, { updatedAt: nowIso() });
+      setMessage(`Importováno ${ankiData.length} karet.`);
+      setAnkiData([]);
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
@@ -170,7 +174,7 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
       </div>
 
       <div className="mode-tabs import-tabs">
-        {(['json', 'csv', 'markdown', 'bulk', 'anki'] as ImportTab[]).map((item) => (
+        {(['json', 'csv', 'markdown', 'anki'] as ImportTab[]).map((item) => (
           <button className={tab === item ? 'active' : ''} key={item} onClick={() => setTab(item)}>{t.import[item] ?? item.toUpperCase()}</button>
         ))}
       </div>
@@ -178,7 +182,7 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
       {message && <p className="success-box">{message}</p>}
       {error && <p className="error-box">{error}</p>}
 
-      {tab !== 'json' && (
+      {tab !== 'json' && tab !== 'anki' && (
         <label className="target-deck">
           {t.import.targetDeck}
           <select value={targetDeckId} onChange={(event) => setTargetDeckId(event.target.value)}>
@@ -236,17 +240,6 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
           </button>
         </section>
       )}
-
-      {tab === 'bulk' && (
-        <section className="panel stack">
-          <h2>{t.import.bulk}</h2>
-          <textarea value={bulkText} onChange={(event) => setBulkText(event.target.value)} rows={10} placeholder="Otázka :: Odpověď :: tagy" />
-          <PreviewBlock preview={bulkPreview} />
-          <button className="primary-button" disabled={!targetDeckId || bulkPreview.cards.filter((card) => card.errors.length === 0).length === 0} onClick={importBulk}>
-            {t.import.createCards}
-          </button>
-        </section>
-      )}
       
       {tab === 'anki' && (
         <section className="panel">
@@ -254,8 +247,21 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
           <p>{'Nahrajte ZIP balíček z Anki (obsahující .xml a složku blobs).'}</p>
           <label className="upload-button wide">
             {'Vybrat ZIP'}
-            <input type="file" accept=".zip" onChange={(event) => handleAnki(event.target.files?.[0])} />
+            <input type="file" accept=".zip" onChange={(event) => handleAnkiPreview(event.target.files?.[0])} />
           </label>
+          
+          {ankiData.length > 0 && (
+             <div className="button-row" style={{ marginTop: '1rem' }}>
+               <button className="primary-button" onClick={() => executeAnkiImport(true)}>
+                 {'Vytvořit balíček ' + zipFileName}
+               </button>
+               {decks.length > 0 && (
+                 <button className="secondary-button" onClick={() => executeAnkiImport(false)}>
+                   {'Přidat do existujícího balíčku'}
+                 </button>
+               )}
+             </div>
+          )}
         </section>
       )}
     </section>
