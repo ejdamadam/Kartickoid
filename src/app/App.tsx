@@ -103,8 +103,8 @@ export default function App() {
               }} /> : (
                 <div className="stack">
                     <p>Kartičkoid</p>
-                    <p className="muted">Verze: 1.0.5 (Final-Update-Fix)</p>
-                    <p>Vytvořeno s láskou pro Alenku.</p>
+                    <p className="muted">Verze: 1.0.5</p>
+                    <p>Vytvořeno pro Alenku.</p>
                 </div>
               )}
           </Modal>
