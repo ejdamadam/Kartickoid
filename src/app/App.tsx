@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useLayoutEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import HomePage from '../pages/HomePage';
 import DeckPage from '../pages/DeckPage';
@@ -28,33 +28,6 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [modal, setModal] = useState<'settings' | 'about'>();
-
-  useLayoutEffect(() => {
-    const savedTheme = localStorage.getItem('app-theme');
-    if (savedTheme) {
-        try {
-            const theme = JSON.parse(savedTheme);
-            const style = document.createElement('style');
-            style.id = 'custom-theme-styles';
-            
-            const hexToRgb = (hex: string) => {
-              const r = parseInt(hex.slice(1, 3), 16);
-              const g = parseInt(hex.slice(3, 5), 16);
-              const b = parseInt(hex.slice(5, 7), 16);
-              return `${r}, ${g}, ${b}`;
-            };
-
-            style.innerHTML = `
-              :root { 
-                --primary-color: ${theme.primary}; 
-                --primary-rgb: ${hexToRgb(theme.primary)};
-                --bg-color: ${theme.bg}; 
-                --bg-rgb: ${hexToRgb(theme.bg)};
-              }`;
-            document.head.appendChild(style);
-        } catch(e) {}
-    }
-  }, []);
 
   useEffect(() => {
     async function checkBackupReminder() {
@@ -93,20 +66,8 @@ export default function App() {
       />
 
       {modal && (
-          <Modal title={modal === 'settings' ? 'Nastavení' : 'O aplikaci'} onClose={() => {
-              if (modal === 'settings') window.location.reload();
-              setModal(undefined);
-          }}>
-              {modal === 'settings' ? <SettingsModal onClose={() => {
-                  window.location.reload();
-                  setModal(undefined);
-              }} /> : (
-                <div className="stack">
-                    <p>Kartičkoid</p>
-                    <p className="muted">Verze: 1.0.5</p>
-                    <p>Vytvořeno pro Alenku.</p>
-                </div>
-              )}
+          <Modal title={modal === 'settings' ? 'Nastavení' : 'O aplikaci'} onClose={() => setModal(undefined)}>
+              {modal === 'settings' ? <SettingsModal onClose={() => setModal(undefined)} /> : <p>Kartičkoid v0.42.0</p>}
           </Modal>
       )}
       

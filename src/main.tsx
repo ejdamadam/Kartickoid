@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './app/App'
+import { ThemeProvider } from './contexts/ThemeContext'
 import './app/styles.css'
 
 // Global error handler for mobile debugging
@@ -21,7 +22,9 @@ if (!rootElement) {
   try {
     ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
-        <App />
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>
       </React.StrictMode>,
     )
   } catch (e) {
