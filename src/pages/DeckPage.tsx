@@ -153,12 +153,17 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   }
 
   async function deleteCard(card: Card) {
-    const ok = window.confirm(t.deck.deleteCardConfirm);
-    if (!ok) return;
+    // Scroll position preservation
+    const scrollPos = window.scrollY;
     try {
       await deleteCardCascade(card.id);
       await db.decks.update(deckId, { updatedAt: nowIso() });
       onChanged();
+      
+      // Use requestAnimationFrame to restore scroll after the browser reflows
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPos);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     }

@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import HomePage from '../pages/HomePage';
 import DeckPage from '../pages/DeckPage';
@@ -8,6 +8,7 @@ import StatsPage from '../pages/StatsPage';
 import AppDrawer from '../components/AppDrawer';
 import OfflineStatus from '../components/OfflineStatus';
 import Modal from '../components/Modal';
+import SettingsModal from '../components/SettingsModal';
 import { downloadBackup } from '../services/exportImport';
 import { db } from '../db/database';
 import { nowIso } from '../utils/date';
@@ -24,16 +25,48 @@ export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [modal, setModal] = useState<'settings' | 'about'>();
+
+  useLayoutEffect(() => {
+    const savedTheme = localStorage.getItem('app-theme');
+    if (savedTheme) {
+        try {
+            const theme = JSON.parse(savedTheme);
+            const style = document.createElement('style');
+            style.id = 'custom-theme-styles';
+            
+            // Helper to convert hex to RGB
+            const hexToRgb = (hex: string) => {
+              const r = parseInt(hex.slice(1, 3), 16);
+              const g = parseInt(hex.slice(3, 5), 16);
+              const b = parseInt(hex.slice(5, 7), 16);
+              return `${r}, ${g}, ${b}`;
+            };
+
+            style.innerHTML = `
+              :root { 
+                --primary-color: ${theme.primary}; 
+                --primary-rgb: ${hexToRgb(theme.primary)};
+                --bg-color: ${theme.bg}; 
+                --bg-rgb: ${hexToRgb(theme.bg)};
+              }`;
+            document.head.appendChild(style);
+        } catch(e) {}
+    }
+  }, []);
 
   useEffect(() => {
     async function checkBackupReminder() {
         const meta = await db.appMeta.get('lastBackupAt');
-        const lastBackup = meta ? new Date(meta.value as string) : new Date(0);
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const intervalMeta = await db.appMeta.get('backupInterval');
+        const interval = intervalMeta ? Number(intervalMeta.value) : 7;
 
-        if (lastBackup < sevenDaysAgo) {
-            if (window.confirm('Je to více než 7 dní od poslední zálohy. Chcete nyní exportovat zálohu databáze?')) {
+        const lastBackup = meta ? new Date(meta.value as string) : new Date(0);
+        const limitDate = new Date();
+        limitDate.setDate(limitDate.getDate() - interval);
+
+        if (lastBackup < limitDate) {
+            if (window.confirm(`Je to více než ${interval} dní od poslední zálohy. Chcete nyní exportovat zálohu databáze?`)) {
                 await downloadBackup();
                 await db.appMeta.put({ key: 'lastBackupAt', value: nowIso(), updatedAt: nowIso() });
             }
@@ -53,9 +86,21 @@ export default function App() {
         onImport={() => setRoute({ name: 'import' })}
         onExport={downloadBackup}
         onStats={() => setRoute({ name: 'stats' })}
-        onSettings={() => {}}
-        onAbout={() => {}}
+        onSettings={() => setModal('settings')}
+        onAbout={() => setModal('about')}
       />
+
+      {modal && (
+          <Modal title={modal === 'settings' ? 'Nastavení' : 'O aplikaci'} onClose={() => {
+              if (modal === 'settings') window.location.reload();
+              setModal(undefined);
+          }}>
+              {modal === 'settings' ? <SettingsModal onClose={() => {
+                  window.location.reload();
+                  setModal(undefined);
+              }} /> : <p>Kartičkoid v0.42.0</p>}
+          </Modal>
+      )}
       
       <main className="main-content">
         {route.name !== 'study' && (
