@@ -4,6 +4,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: '/Kartickoid/',
+  build: {
+    target: 'es2020'
+  },
   plugins: [
     react(),
     VitePWA({
