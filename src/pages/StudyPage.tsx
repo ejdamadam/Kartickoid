@@ -310,6 +310,8 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
     }
   }, [answered, correct]);
 
+  const praise = useMemo(() => takeRandom(t.study.praises, 1)[0], [card.id]);
+
   return (
     <article className="mode-panel">
       <div className="review-side">
@@ -334,9 +336,9 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
           );
         })}
       </div>
-
-      {answered && (        <motion.div className={`feedback-box ${correct ? 'success-box' : 'error-box'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          {correct ? t.study.correct : (
+      {answered && (
+        <motion.div className={`feedback-box ${correct ? 'success-box' : 'error-box'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          {correct ? praise : (
             <>
               {t.study.wrong('')}
               <RichTextDisplay content={card.backText} />
@@ -396,6 +398,8 @@ function WritingMode({ card, media, onRate }: {
     setResult(undefined);
   }
 
+  const praise = useMemo(() => takeRandom(t.study.praises, 1)[0], [card.id]);
+
   if (!targetDisplayFront && !targetDisplayBack) {
       return <article className="mode-panel"><p className="muted">Kartičku nelze v tomto režimu procvičit.</p></article>;
   }
@@ -421,7 +425,7 @@ function WritingMode({ card, media, onRate }: {
       {result && (
         <motion.div className="writing-result" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <div className={result.accepted ? 'success-box' : 'error-box'}>
-            {t.study.similarity(result.similarity)} · {result.accepted ? t.study.accepted : t.study.rejected}
+            {result.accepted ? praise : t.study.similarity(result.similarity)} · {result.accepted ? '' : t.study.rejected}
           </div>
           <p><strong>{t.study.back}:</strong> <RichTextDisplay content={targetDisplayBack} /></p>
           <CardMediaList media={targetBackMedia} side={swapped ? 'front' : 'back'} />
