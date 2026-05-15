@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { t } from '../i18n';
 
@@ -25,6 +26,18 @@ export default function AppDrawer({ open, onClose, onHome, onImport, onExport, o
     { label: t.common.about, action: onAbout },
   ];
 
+  const [clickCount, setClickCount] = useState(0);
+
+  const handleEasterEgg = () => {
+    const next = clickCount + 1;
+    if (next >= 5) {
+      alert('Hejou ty magore!! Všecičko nejlepší Aliíiíiíií!');
+      setClickCount(0);
+    } else {
+      setClickCount(next);
+    }
+  };
+
   return (
     <div className="drawer-layer" style={{ pointerEvents: open ? 'auto' : 'none' }}>
       <motion.button
@@ -40,7 +53,7 @@ export default function AppDrawer({ open, onClose, onHome, onImport, onExport, o
         animate={{ x: open ? '0%' : '-100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       >
-        <header className="drawer-header">
+        <header className="drawer-header" onClick={handleEasterEgg} style={{ cursor: 'pointer' }}>
           <div className="brand-mark">{t.app.mark}</div>
           <div>
             <strong>{t.app.name}</strong>
