@@ -4,6 +4,7 @@ import CardForm, { type CardFormValues } from '../components/CardForm';
 import CardMediaList from '../components/CardMediaList';
 import RichTextDisplay from '../components/RichTextDisplay';
 import Modal from '../components/Modal';
+import CardStatistics from '../components/CardStatistics';
 import { addMediaToCard, createCardInput, db, deleteCardCascade, removeMediaFromCard } from '../db/database';
 import { processMediaForCard } from '../services/mediaProcessing';
 import { cardsToCsv } from '../services/exporters/csvExporter';
@@ -83,6 +84,25 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
     });
   }, [cards, query, tagFilter]);
 
+  async function flipSide(card: Card) {
+    try {
+      await db.cards.update(card.id, {
+        frontText: card.backText,
+        backText: card.frontText,
+        updatedAt: nowIso()
+      });
+      const cardMedia = media.filter((item) => item.cardId === card.id);
+      for (const item of cardMedia) {
+        await db.media.update(item.id, {
+          side: item.side === 'front' ? 'back' : 'front'
+        });
+      }
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
   async function saveCard(values: CardFormValues) {
     try {
       if (editingCard === 'new') {
@@ -109,25 +129,6 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
       }
       await db.decks.update(deckId, { updatedAt: nowIso() });
       setEditingCard(undefined);
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.common.error);
-    }
-  }
-
-  async function flipSide(card: Card) {
-    try {
-      await db.cards.update(card.id, {
-        frontText: card.backText,
-        backText: card.frontText,
-        updatedAt: nowIso()
-      });
-      const cardMedia = media.filter((item) => item.cardId === card.id);
-      for (const item of cardMedia) {
-        await db.media.update(item.id, {
-          side: item.side === 'front' ? 'back' : 'front'
-        });
-      }
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
@@ -334,9 +335,11 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
               <div className="tag-row">
                 {card.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
               </div>
-              <p className="muted">{t.deck.nextReview}: {formatDate(card.dueAt)} · {t.deck.interval} {card.intervalDays} dní · {t.deck.ease} {card.ease}</p>
+              <CardStatistics card={card} logs={logs} />
+              <p className="muted">{t.deck.nextReview}: {formatDate(card.dueAt)}</p>
               <div className="button-row">
-                <button className="secondary-button" onClick={() => flipSide(card)}>Prohodit</button><button className="secondary-button" onClick={() => setEditingCard(card)}>{t.common.edit}</button>
+                <button className="secondary-button" onClick={() => flipSide(card)}>Prohodit</button>
+                <button className="secondary-button" onClick={() => setEditingCard(card)}>{t.common.edit}</button>
                 <button className="danger-button" onClick={() => deleteCard(card)}>{t.common.delete}</button>
               </div>
             </article>

@@ -11,6 +11,7 @@ export interface StatsOverview {
   hardestCards: Array<{ card: Card; misses: number }>;
   weeklyActivity: Array<{ label: string; count: number }>;
   recentLogs: ReviewLog[];
+  ratingDistribution: Record<string, number>;
 }
 
 export async function getStatsOverview(): Promise<StatsOverview> {
@@ -22,10 +23,13 @@ export async function getStatsOverview(): Promise<StatsOverview> {
   const today = startOfTodayIso();
   const successful = logs.filter((log) => log.rating === 'good' || log.rating === 'easy').length;
   const mistakeCounts = new Map<string, number>();
+  const ratingDistribution: Record<string, number> = { again: 0, hard: 0, good: 0, easy: 0 };
+
   logs.forEach((log) => {
     if (log.rating === 'again' || log.rating === 'hard') {
       mistakeCounts.set(log.cardId, (mistakeCounts.get(log.cardId) ?? 0) + 1);
     }
+    ratingDistribution[log.rating] = (ratingDistribution[log.rating] ?? 0) + 1;
   });
 
   return {
@@ -40,7 +44,8 @@ export async function getStatsOverview(): Promise<StatsOverview> {
       .sort((a, b) => b.misses - a.misses)
       .slice(0, 5),
     weeklyActivity: buildWeeklyActivity(logs),
-    recentLogs: logs.slice(0, 8)
+    recentLogs: logs.slice(0, 8),
+    ratingDistribution
   };
 }
 

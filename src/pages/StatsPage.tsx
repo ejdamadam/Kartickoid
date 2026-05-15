@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { t } from '../i18n';
 import { getStatsOverview, type StatsOverview } from '../services/stats';
 import { formatDateTime } from '../utils/date';
+import RichTextDisplay from '../components/RichTextDisplay';
 
 interface StatsPageProps {
   onBack: () => void;
@@ -45,11 +46,15 @@ export default function StatsPage({ onBack }: StatsPageProps) {
           </div>
 
           <section className="panel stack">
-            <div className="section-title">
-              <h2>{t.stats.successRate}</h2>
-              <span>{stats.successRate} %</span>
+            <h2>{t.stats.distribution}</h2>
+            <div className="stats-row">
+              {Object.entries(stats.ratingDistribution).map(([rating, count]) => (
+                <div key={rating}>
+                  <strong>{count}</strong>
+                  <small style={{ display: 'block' }}>{rating}</small>
+                </div>
+              ))}
             </div>
-            <div className="progress-track"><span style={{ width: `${stats.successRate}%` }} /></div>
           </section>
 
           <section className="panel stack">
@@ -69,7 +74,7 @@ export default function StatsPage({ onBack }: StatsPageProps) {
               <h2>{t.stats.hardestCards}</h2>
               {stats.hardestCards.length === 0 ? <p className="muted">{t.stats.noData}</p> : stats.hardestCards.map((item) => (
                 <div className="compact-row" key={item.card.id}>
-                  <strong>{item.card.frontText || item.card.backText || t.deck.imageOnly}</strong>
+                  <RichTextDisplay content={item.card.frontText || item.card.backText || t.deck.imageOnly} />
                   <span>{item.misses}×</span>
                 </div>
               ))}

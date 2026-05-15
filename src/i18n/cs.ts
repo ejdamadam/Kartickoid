@@ -191,7 +191,7 @@ export const cs = {
   },
   stats: {
     title: 'Statistiky',
-    lead: 'Jednoduchý přehled bez zbytečných grafů.',
+    lead: 'Detailní přehled tvého pokroku.',
     today: 'Dnes procvičeno',
     streak: 'Aktuální série',
     due: 'K opakování',
@@ -201,7 +201,8 @@ export const cs = {
     recentActivity: 'Nedávná aktivita',
     weeklyActivity: 'Týdenní aktivita',
     recentSessions: 'Nedávné session',
-    noData: 'Zatím tu nejsou žádná data z procvičování.'
+    noData: 'Zatím tu nejsou žádná data z procvičování.',
+    distribution: 'Rozdělení obtížnosti'
   },
   pwa: {
     online: 'Online',
