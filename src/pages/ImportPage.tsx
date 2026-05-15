@@ -12,13 +12,14 @@ import { t } from '../i18n';
 interface ImportPageProps {
   onBack: () => void;
   onChanged: () => void;
+  onDeckCreated?: (deckId: string) => void;
 }
 
 type ImportTab = 'json' | 'csv' | 'markdown' | 'anki';
 
 const emptyPreview: ImportPreview = { cards: [], skippedRows: 0, warnings: [] };
 
-export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
+export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportPageProps) {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [targetDeckId, setTargetDeckId] = useState('');
   const [tab, setTab] = useState<ImportTab>('json');
@@ -140,6 +141,7 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
         await db.decks.add(deck);
         deckId = deck.id;
         await loadDecks();
+        if (onDeckCreated) onDeckCreated(deckId);
       }
       
       if (!deckId) throw new Error('Vyberte balíček nebo vytvořte nový.');

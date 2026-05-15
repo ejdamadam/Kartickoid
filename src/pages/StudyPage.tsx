@@ -131,8 +131,8 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
 
   return (
     <section className="study-page mobile-study">
-      <button className="minimal-back" onClick={onBack} aria-label={t.common.back}>×</button>
       <div className="study-header-compact">
+        <button className="text-button" onClick={onBack}>← Zpět</button>
         <h1>{deck?.name ?? t.deck.label}</h1>
         <span className="pill pill-muted">{queue.length === 0 ? 0 : Math.min(index + 1, queue.length)} / {queue.length}</span>
       </div>

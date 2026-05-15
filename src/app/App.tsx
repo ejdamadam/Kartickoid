@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import HomePage from '../pages/HomePage';
 import DeckPage from '../pages/DeckPage';
@@ -9,6 +9,8 @@ import AppDrawer from '../components/AppDrawer';
 import OfflineStatus from '../components/OfflineStatus';
 import Modal from '../components/Modal';
 import { downloadBackup } from '../services/exportImport';
+import { db } from '../db/database';
+import { nowIso } from '../utils/date';
 import { t } from '../i18n';
 
 type Route =
@@ -20,59 +22,56 @@ type Route =
 
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
-  const [refreshKey, setRefreshKey] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [infoModal, setInfoModal] = useState<'settings' | 'about'>();
-  const [toast, setToast] = useState<string>();
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
-  const notify = useCallback((message: string) => {
-    setToast(message);
-    window.setTimeout(() => setToast(undefined), 2600);
-    if ('vibrate' in navigator) navigator.vibrate(12);
+  useEffect(() => {
+    async function checkBackupReminder() {
+        const meta = await db.appMeta.get('lastBackupAt');
+        const lastBackup = meta ? new Date(meta.value as string) : new Date(0);
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        if (lastBackup < sevenDaysAgo) {
+            if (window.confirm('Je to více než 7 dní od poslední zálohy. Chcete nyní exportovat zálohu databáze?')) {
+                await downloadBackup();
+                await db.appMeta.put({ key: 'lastBackupAt', value: nowIso(), updatedAt: nowIso() });
+            }
+        }
+    }
+    checkBackupReminder();
   }, []);
 
-  async function exportBackup() {
-    try {
-      await downloadBackup();
-      notify(t.nav.backupExported);
-    } catch {
-      notify(t.common.error);
-    }
-  }
+  const refresh = useCallback(() => setRefreshKey((prev) => prev + 1), []);
 
   return (
-    <div className={`app-shell ${route.name === 'study' ? 'study-mode' : ''}`}>
-      {route.name !== 'study' && (
-        <header className="topbar">
-          <button className="menu-button" onClick={() => setDrawerOpen(true)} aria-label={t.common.openMenu}>
-            <span />
-            <span />
-            <span />
-          </button>
-          <div className="topbar-center">
-            {route.name === 'home' ? (
-              <button className="brand-button" onClick={() => setRoute({ name: 'home' })} aria-label={t.nav.home}>
-                <span>{t.app.name}</span>
-              </button>
-            ) : (
-              <button className="brand-button back-link" onClick={() => setRoute({ name: 'home' })}>
-                ← {t.nav.home}
-              </button>
-            )}
-          </div>
-          <OfflineStatus />
-        </header>
-      )}
+    <div className="app-shell">
+      <AppDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onHome={() => setRoute({ name: 'home' })}
+        onImport={() => setRoute({ name: 'import' })}
+        onExport={downloadBackup}
+        onStats={() => setRoute({ name: 'stats' })}
+        onSettings={() => {}}
+        onAbout={() => {}}
+      />
+      
+      <main className="main-content">
+        {route.name !== 'study' && (
+          <header className="app-header">
+            <button className="icon-button" onClick={() => setDrawerOpen(true)} aria-label="Menu">☰</button>
+            <button className="text-button" onClick={() => setRoute({ name: 'home' })}>← Domů</button>
+            <OfflineStatus />
+          </header>
+        )}
 
-      <main className="app-main">
         <AnimatePresence mode="wait">
           <motion.div
             key={route.name}
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
+            exit={{ opacity: 0, x: -10 }}
             className="route-container"
           >
             {route.name === 'home' && (
@@ -105,6 +104,7 @@ export default function App() {
               <ImportPage
                 onBack={() => setRoute({ name: 'home' })}
                 onChanged={refresh}
+                onDeckCreated={(deckId) => setRoute({ name: 'deck', deckId })}
               />
             )}
 
@@ -114,28 +114,6 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </main>
-
-      <AppDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onHome={() => setRoute({ name: 'home' })}
-        onImport={() => setRoute({ name: 'import' })}
-        onExport={exportBackup}
-        onStats={() => setRoute({ name: 'stats' })}
-        onSettings={() => setInfoModal('settings')}
-        onAbout={() => setInfoModal('about')}
-      />
-
-      {infoModal && (
-        <Modal title={infoModal === 'settings' ? t.common.settings : t.common.about} onClose={() => setInfoModal(undefined)}>
-          <div className="stack">
-            <p>{infoModal === 'settings' ? t.nav.settingsBody : t.nav.aboutBody}</p>
-            <button className="primary-button" onClick={() => setInfoModal(undefined)}>{t.common.done}</button>
-          </div>
-        </Modal>
-      )}
-
-      {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
 }
