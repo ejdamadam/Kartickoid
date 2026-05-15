@@ -34,9 +34,11 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   const [query, setQuery] = useState('');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
     Promise.all([
       db.decks.get(deckId),
       db.cards.where('deckId').equals(deckId).toArray(),
@@ -49,8 +51,14 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         setCards(nextCards.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
         setMedia(nextMedia.filter((item) => nextCards.some((card) => card.id === item.cardId)));
         setLogs(nextLogs);
+        setLoading(false);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : t.common.error));
+      .catch((err) => {
+          if (active) {
+            setError(err instanceof Error ? err.message : t.common.error);
+            setLoading(false);
+          }
+      });
 
     return () => {
       active = false;
@@ -266,7 +274,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
     }
   }
 
-  if (!deck) {
+  if (!deck && !loading) {
     return (
       <section className="page">
         <button className="back-button" onClick={onBack}>← {t.common.back}</button>
@@ -275,12 +283,16 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
     );
   }
 
+  if (loading) {
+      return <section className="page"><p className="muted">Načítám...</p></section>;
+  }
+
   return (
     <section className="page">
       <div className="page-heading">
         <div>
-          <h1>{deck.name}</h1>
-          {deck.description && <p className="lead">{deck.description}</p>}
+          <h1>{deck?.name}</h1>
+          {deck?.description && <p className="lead">{deck.description}</p>}
         </div>
         <div className="toolbar">
           <button className="primary-button" onClick={onStudy}>{t.deck.study}</button>

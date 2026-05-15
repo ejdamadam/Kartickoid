@@ -182,7 +182,7 @@ export default function ImportPage({ onBack, onChanged }: ImportPageProps) {
       {message && <p className="success-box">{message}</p>}
       {error && <p className="error-box">{error}</p>}
 
-      {tab !== 'json' && tab !== 'anki' && (
+      {tab !== 'json' && (
         <label className="target-deck">
           {t.import.targetDeck}
           <select value={targetDeckId} onChange={(event) => setTargetDeckId(event.target.value)}>
