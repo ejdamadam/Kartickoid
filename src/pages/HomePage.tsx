@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Modal from '../components/Modal';
 import DeckForm from '../components/DeckForm';
-import { createDeckInput, db } from '../db/database';
+import { createDeckInput, db, deleteDeckCascade } from '../db/database';
 import type { Deck, DeckSummary } from '../types';
 import { formatDateTime, nowIso } from '../utils/date';
 import { t } from '../i18n';
@@ -87,6 +87,17 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
     }
   }
 
+  async function deleteDeck(deck: Deck) {
+    const ok = window.confirm(t.deck.deleteConfirm(deck.name));
+    if (!ok) return;
+    try {
+      await deleteDeckCascade(deck.id);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
   function toggleDeckSelection(id: string) {
     setSelectedDecks(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   }
@@ -155,6 +166,7 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
             </div>
             <div className="button-row">
                 <button className="tiny-button" onClick={() => setEditingDeck(summary.deck)}>{t.common.edit}</button>
+                <button className="tiny-button danger" onClick={() => deleteDeck(summary.deck)}>{t.common.delete}</button>
             </div>
           </article>
         ))}

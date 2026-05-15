@@ -5,12 +5,26 @@ import './app/styles.css'
 
 // Global error handler for mobile debugging
 window.onerror = function(message, source, lineno, colno, error) {
-  alert("Chyba aplikace: " + message + "\nZdroj: " + source + "\nŘádek: " + lineno);
+  const errStr = "Chyba aplikace: " + message + "\nZdroj: " + source + "\nŘádek: " + lineno;
+  console.error(errStr, error);
+  // Only alert if we are not on local dev
+  if (!window.location.hostname.includes('localhost')) {
+    alert(errStr);
+  }
   return false;
 };
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  alert("Chyba: Element 'root' nebyl nalezen.");
+} else {
+  try {
+    ReactDOM.createRoot(rootElement).render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>,
+    )
+  } catch (e) {
+    alert("Kritická chyba při vykreslování: " + (e instanceof Error ? e.message : String(e)));
+  }
+}
