@@ -326,7 +326,7 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
               key={option.id}
               onClick={() => setSelectedId(option.id)}
             >
-              <span>{option.backText }</span>
+              <div className="choice-text"><RichTextDisplay content={option.backText} /></div>
               <CardMediaList media={optionMedia} side="back" />
             </button>
           );
@@ -334,7 +334,12 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
       </div>
       {answered && (
         <motion.div className={`feedback-box ${correct ? 'success-box' : 'error-box'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          {correct ? t.study.correct : t.study.wrong(card.backText )}
+          {correct ? t.study.correct : (
+            <>
+              {t.study.wrong('')}
+              <RichTextDisplay content={card.backText} />
+            </>
+          )}
         </motion.div>
       )}
       {revealed && (
