@@ -140,12 +140,15 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: { si
 
   async function startRecording() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mediaRecorder = new MediaRecorder(stream);
+    // Prefer audio/mp4 (AAC) if supported, else webm
+    const mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+    const mediaRecorder = new MediaRecorder(stream, { mimeType });
     setChunks([]);
     mediaRecorder.ondataavailable = (e) => setChunks((c) => [...c, e.data]);
     mediaRecorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'audio/webm' });
-      onAdd([new File([blob], 'recording.webm', { type: 'audio/webm' })], side);
+      const blob = new Blob(chunks, { type: mimeType });
+      const fileExt = mimeType === 'audio/mp4' ? 'm4a' : 'webm';
+      onAdd([new File([blob], `recording.${fileExt}`, { type: mimeType })], side);
       stream.getTracks().forEach(track => track.stop());
     };
     mediaRecorder.start();
