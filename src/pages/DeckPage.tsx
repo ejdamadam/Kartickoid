@@ -322,7 +322,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         <span><strong>{stats.reviewedToday}</strong> {t.deck.reviewedToday}</span>
       </div>
 
-      <div className="mode-tabs">
+      <div className="mode-tabs narrow">
         <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>Kartičky</button>
         <button className={view === 'stats' ? 'active' : ''} onClick={() => setView('stats')}>Statistika</button>
       </div>

@@ -1,33 +1,69 @@
 import { useEffect, useMemo, useState } from 'react';
 import Modal from '../components/Modal';
 import DeckForm from '../components/DeckForm';
-import { createDeckInput, db, deleteDeckCascade, getDeckSummaries } from '../db/database';
+import { createDeckInput, db } from '../db/database';
 import type { Deck, DeckSummary } from '../types';
-import { formatDateTime, nowIso } from '../utils/date';
+import { nowIso } from '../utils/date';
 import { t } from '../i18n';
 
 interface HomePageProps {
   refreshKey: number;
   onOpenDeck: (deckId: string) => void;
   onChanged: () => void;
+  onCustomStudy: (deckIds: string[], tags: string[]) => void;
 }
 
-export default function HomePage({ refreshKey, onOpenDeck, onChanged }: HomePageProps) {
+export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomStudy }: HomePageProps) {
   const [summaries, setSummaries] = useState<DeckSummary[]>([]);
+  const [allCards, setAllCards] = useState<any[]>([]);
   const [editingDeck, setEditingDeck] = useState<Deck | 'new'>();
+  const [customStudyOpen, setCustomStudyOpen] = useState(false);
+  const [selectedDecks, setSelectedDecks] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    getDeckSummaries().then(setSummaries).catch((err) => setError(err.message));
+    let active = true;
+    Promise.all([
+      db.decks.toArray(),
+      db.cards.toArray(),
+      db.reviewLogs.toArray()
+    ]).then(([decks, cards, logs]) => {
+      if (!active) return;
+      setAllCards(cards);
+      const nextSummaries: DeckSummary[] = decks.map(deck => {
+        const deckCards = cards.filter(c => c.deckId === deck.id);
+        const deckLogs = logs.filter(l => l.deckId === deck.id);
+        const now = new Date();
+        const sortedLogs = [...deckLogs].sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt));
+        return {
+          deck,
+          cardCount: deckCards.length,
+          dueCount: deckCards.filter(c => new Date(c.dueAt) <= now).length,
+          newCount: deckCards.filter(c => c.repetitions === 0 && c.lapses === 0).length,
+          reviewedToday: deckLogs.filter(l => l.reviewedAt >= now.toISOString().slice(0, 10)).length,
+          lastReviewedAt: sortedLogs[0]?.reviewedAt ?? deck.updatedAt
+        };
+      });
+      setSummaries(nextSummaries.sort((a, b) => (b.lastReviewedAt ?? '').localeCompare(a.lastReviewedAt ?? '')));
+    });
+    return () => { active = false; };
   }, [refreshKey]);
 
-  const dashboard = useMemo(() => ({
-    due: summaries.reduce((sum, item) => sum + item.dueCount, 0),
-    fresh: summaries.reduce((sum, item) => sum + item.newCount, 0),
-    studied: summaries.reduce((sum, item) => sum + item.reviewedToday, 0),
-    quickDeck: summaries.find((item) => item.dueCount > 0)?.deck ?? summaries[0]?.deck
-  }), [summaries]);
+  const availableTags = useMemo(() => {
+    if (selectedDecks.length === 0) return [];
+    const tags = new Set<string>();
+    allCards
+      .filter(card => selectedDecks.includes(card.deckId))
+      .forEach(card => card.tags.forEach((tag: string) => tags.add(tag)));
+    return Array.from(tags).sort((a, b) => a.localeCompare(b, 'cs'));
+  }, [selectedDecks, allCards]);
+
+  const filteredSummaries = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    return summaries.filter(s => s.deck.name.toLowerCase().includes(q) || s.deck.description?.toLowerCase().includes(q));
+  }, [summaries, query]);
 
   async function saveDeck(values: { name: string; description: string }) {
     try {
@@ -51,105 +87,104 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged }: HomePage
     }
   }
 
-  async function deleteDeck(deck: Deck) {
-    const ok = window.confirm(t.deck.deleteConfirm(deck.name));
-    if (!ok) return;
-    try {
-      await deleteDeckCascade(deck.id);
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.common.error);
-    }
+  function toggleDeckSelection(id: string) {
+    setSelectedDecks(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   }
 
-  const filteredSummaries = summaries.filter((summary) => (
-    !query.trim()
-    || summary.deck.name.toLowerCase().includes(query.trim().toLowerCase())
-    || summary.deck.description.toLowerCase().includes(query.trim().toLowerCase())
-  ));
+  function toggleTagSelection(tag: string) {
+    setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  }
 
   return (
     <section className="page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">{t.app.localStudy}</p>
+          <p className="eyebrow">{t.app.name}</p>
           <h1>{t.home.title}</h1>
         </div>
         <div className="toolbar">
+          <button className="secondary-button" onClick={() => setCustomStudyOpen(true)}>Procvičit více sad</button>
           <button className="primary-button" onClick={() => setEditingDeck('new')}>{t.home.newDeck}</button>
         </div>
       </div>
 
       {error && <p className="error-box">{error}</p>}
 
-      <section className="dashboard-grid">
-        <article className="dashboard-card primary">
-          <p className="eyebrow">{t.home.dueCards}</p>
-          <strong>{dashboard.due}</strong>
-          <span>{t.deck.due}</span>
-          {dashboard.quickDeck && (
-            <button className="light-button" onClick={() => onOpenDeck(dashboard.quickDeck.id)}>{t.home.continue}: {dashboard.quickDeck.name}</button>
-          )}
-        </article>
-        <article className="dashboard-card">
-          <p className="eyebrow">{t.home.newCards}</p>
-          <strong>{dashboard.fresh}</strong>
-          <span>{t.home.newCards}</span>
-        </article>
-        <article className="dashboard-card">
-          <p className="eyebrow">{t.home.streak}</p>
-          <strong>{dashboard.studied > 0 ? '1' : '0'}</strong>
-          <span>{t.home.streak}</span>
-        </article>
-        <article className="dashboard-card">
-          <p className="eyebrow">{t.home.studiedToday}</p>
-          <strong>{dashboard.studied}</strong>
-          <span>{t.home.studiedToday}</span>
-        </article>
-      </section>
-
-      <label className="home-search">
-        {t.common.search}
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.home.searchPlaceholder} />
-      </label>
-
-      <div className="section-title">
-        <h2>{t.home.recentDecks}</h2>
-        <span>{filteredSummaries.length} {t.deck.total}</span>
+      <div className="home-search">
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.home.searchPlaceholder} />
       </div>
 
-      {filteredSummaries.length === 0 ? (
-        <div className="empty-state">
-          <h2>{t.home.emptyTitle}</h2>
-          <p>{t.home.emptyBody}</p>
-          <button className="primary-button" onClick={() => setEditingDeck('new')}>{t.home.createDeck}</button>
-        </div>
-      ) : (
-        <div className="deck-grid">
-          {filteredSummaries.map((summary) => (
-            <article className="deck-card" key={summary.deck.id}>
-              <button className="deck-open" onClick={() => onOpenDeck(summary.deck.id)}>
-                <span className="deck-title">{summary.deck.name}</span>
-                {summary.deck.description && <span className="deck-description">{summary.deck.description}</span>}
-              </button>
-              <div className="metric-grid">
-                <span><strong>{summary.cardCount}</strong> {t.home.cards}</span>
-                <span><strong>{summary.dueCount}</strong> {t.common.today}</span>
-                <span><strong>{summary.reviewedToday}</strong> {t.home.reviewed}</span>
-              </div>
-              <p className="muted">{t.home.lastStudied}: {formatDateTime(summary.lastReviewedAt)}</p>
-              <div className="button-row">
-                <button className="secondary-button" onClick={() => setEditingDeck(summary.deck)}>{t.common.edit}</button>
-                <button className="danger-button" onClick={() => deleteDeck(summary.deck)}>{t.common.delete}</button>
-              </div>
-            </article>
-          ))}
-        </div>
+      <div className="deck-grid">
+        {filteredSummaries.map((summary) => (
+          <article className="deck-card" key={summary.deck.id}>
+            <button className="deck-open" onClick={() => onOpenDeck(summary.deck.id)}>
+              <span className="deck-title">{summary.deck.name}</span>
+              {summary.deck.description && <span className="deck-description">{summary.deck.description}</span>}
+            </button>
+            <div className="metric-grid">
+              <span><strong>{summary.cardCount}</strong> {t.home.cards}</span>
+              <span><strong>{summary.dueCount}</strong> {t.common.today}</span>
+              <span><strong>{summary.reviewedToday}</strong> {t.home.reviewed}</span>
+            </div>
+            <div className="button-row">
+                <button className="tiny-button" onClick={() => setEditingDeck(summary.deck)}>{t.common.edit}</button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {customStudyOpen && (
+        <Modal title="Procvičit více sad" onClose={() => setCustomStudyOpen(false)}>
+          <div className="stack">
+            <p><strong>1. Vyberte sady:</strong></p>
+            <div className="deck-selector-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', maxHeight: '200px', overflow: 'auto', padding: '5px' }}>
+              {summaries.map(s => (
+                <label key={s.deck.id} className={`chip ${selectedDecks.includes(s.deck.id) ? 'selected' : ''}`} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                  <input type="checkbox" checked={selectedDecks.includes(s.deck.id)} onChange={() => toggleDeckSelection(s.deck.id)} style={{ display: 'none' }} />
+                  {s.deck.name}
+                </label>
+              ))}
+            </div>
+            
+            {availableTags.length > 0 && (
+                <>
+                    <p style={{ marginTop: '1rem' }}><strong>2. Filtrovat podle tagů (volitelné):</strong></p>
+                    <div className="tag-selector-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '150px', overflow: 'auto', padding: '5px' }}>
+                        {availableTags.map(tag => (
+                            <button 
+                                key={tag} 
+                                className={`chip ${selectedTags.includes(tag) ? 'selected' : ''}`}
+                                onClick={() => toggleTagSelection(tag)}
+                            >
+                                {tag}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
+
+            <button 
+                className="primary-button wide" 
+                style={{ marginTop: '1.5rem' }}
+                disabled={selectedDecks.length === 0}
+                onClick={() => {
+                    onCustomStudy(selectedDecks, selectedTags);
+                    setCustomStudyOpen(false);
+                }}
+            >
+              Spustit procvičování
+            </button>
+          </div>
+        </Modal>
       )}
 
       {editingDeck && (
         <Modal title={editingDeck === 'new' ? t.home.newDeck : t.home.editDeck} onClose={() => setEditingDeck(undefined)}>
-          <DeckForm deck={editingDeck === 'new' ? undefined : editingDeck} onSubmit={saveDeck} onCancel={() => setEditingDeck(undefined)} />
+          <DeckForm
+            deck={editingDeck === 'new' ? undefined : editingDeck}
+            onSubmit={saveDeck}
+            onCancel={() => setEditingDeck(undefined)}
+          />
         </Modal>
       )}
     </section>

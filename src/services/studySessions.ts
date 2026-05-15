@@ -2,8 +2,29 @@ import type { Card, EntityId, StudySessionSource } from '../types';
 import { db } from '../db/database';
 import { takeRandom } from '../utils/random';
 
-export async function loadStudyCards(deckId: EntityId, source: StudySessionSource): Promise<Card[]> {
-  const cards = await db.cards.where('deckId').equals(deckId).toArray();
+export interface StudyFilter {
+  deckIds: EntityId[];
+  tags: string[];
+}
+
+export async function loadStudyCards(
+  filter: StudyFilter, 
+  source: StudySessionSource
+): Promise<Card[]> {
+  const { deckIds, tags } = filter;
+  
+  let collection = db.cards.toCollection();
+  
+  if (deckIds.length > 0) {
+      collection = db.cards.where('deckId').anyOf(deckIds);
+  }
+
+  let cards = await collection.toArray();
+  
+  if (tags.length > 0) {
+      cards = cards.filter(card => tags.some(tag => card.tags.includes(tag)));
+  }
+
   const now = new Date();
 
   switch (source) {
@@ -16,9 +37,12 @@ export async function loadStudyCards(deckId: EntityId, source: StudySessionSourc
     case 'random':
       return takeRandom(cards, Math.min(cards.length, 20));
     case 'mistakes': {
-      const mistakeLogs = await db.reviewLogs
-        .where('deckId')
-        .equals(deckId)
+      let logCollection = db.reviewLogs.toCollection();
+      if (deckIds.length > 0) {
+          logCollection = db.reviewLogs.where('deckId').anyOf(deckIds);
+      }
+      
+      const mistakeLogs = await logCollection
         .and((log) => log.rating === 'again' || log.rating === 'hard')
         .reverse()
         .limit(50)

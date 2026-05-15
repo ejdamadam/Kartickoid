@@ -4,7 +4,7 @@ import RichTextDisplay from '../components/RichTextDisplay';
 import CardMediaList from '../components/CardMediaList';
 import { db } from '../db/database';
 import { ratingLabels, scheduleCard } from '../services/scheduler';
-import { loadStudyCards } from '../services/studySessions';
+import { loadStudyCards, type StudyFilter } from '../services/studySessions';
 import type { Card, Deck, Media, Rating, StudyMode, StudySessionSource } from '../types';
 import { compareFuzzy, type FuzzyResult } from '../utils/fuzzy';
 import { createId } from '../utils/id';
@@ -12,7 +12,8 @@ import { shuffle, takeRandom } from '../utils/random';
 import { t } from '../i18n';
 
 interface StudyPageProps {
-  deckId: string;
+  deckIds: string[];
+  tags: string[];
   onBack: () => void;
   onChanged: () => void;
 }
@@ -31,8 +32,8 @@ const sourceLabels: Record<StudySessionSource, string> = {
   mistakes: t.study.mistakes
 };
 
-export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps) {
-  const [deck, setDeck] = useState<Deck>();
+export default function StudyPage({ deckIds, tags, onBack, onChanged }: StudyPageProps) {
+  const [deckNames, setDeckNames] = useState<string[]>([]);
   const [allCards, setAllCards] = useState<Card[]>([]);
   const [queue, setQueue] = useState<Card[]>([]);
   const [media, setMedia] = useState<Media[]>([]);
@@ -51,21 +52,27 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
   useEffect(() => {
     let active = true;
     setLoading(true);
+    
+    const filter: StudyFilter = { deckIds, tags };
+    
     Promise.all([
-      db.decks.get(deckId),
-      db.cards.where('deckId').equals(deckId).toArray(),
-      loadStudyCards(deckId, source),
+      db.decks.where('id').anyOf(deckIds).toArray(),
+      loadStudyCards(filter, source),
       db.media.toArray()
     ])
-      .then(([nextDeck, deckCards, sessionCards, allMedia]) => {
+      .then(([decks, sessionCards, allMedia]) => {
         if (!active) return;
-        setDeck(nextDeck);
-        setAllCards(deckCards);
+        setDeckNames(decks.map(d => d.name));
         
+        db.cards.where('deckId').anyOf(deckIds).toArray().then(deckCards => {
+            if (!active) return;
+            setAllCards(deckCards);
+            setMedia(allMedia.filter((item) => deckCards.some((card) => card.id === item.cardId)));
+        });
+
         const finalQueue = limit > 0 ? sessionCards.slice(0, limit) : sessionCards;
         setQueue(finalQueue);
         
-        setMedia(allMedia.filter((item) => deckCards.some((card) => card.id === item.cardId)));
         setIndex(0);
         setCompleted(0);
         setRevealed(false);
@@ -81,7 +88,7 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
     return () => {
       active = false;
     };
-  }, [deckId, source, sessionKey, limit]);
+  }, [deckIds, tags, source, sessionKey, limit]);
 
   const dueCount = useMemo(() => {
     const now = new Date();
@@ -105,7 +112,7 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
         await db.reviewLogs.add({
           id: createId('log'),
           cardId: card.id,
-          deckId,
+          deckId: card.deckId,
           rating,
           reviewedAt: reviewedAt.toISOString()
         });
@@ -145,7 +152,9 @@ export default function StudyPage({ deckId, onBack, onChanged }: StudyPageProps)
     <section className="study-page mobile-study">
       <div className="study-header-compact">
         <button className="text-button" onClick={onBack}>← Zpět</button>
-        <h1>{deck?.name ?? t.deck.label}</h1>
+        <h1 style={{ fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
+            {deckNames.join(', ')}
+        </h1>
         <span className="pill pill-muted">{queue.length === 0 ? 0 : Math.min(index + 1, queue.length)} / {queue.length}</span>
       </div>
 
@@ -309,7 +318,6 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
   }
 
   function next() {
-    const isSkipped = selectedId === 'SKIPPED';
     onRate(correct ? 'good' : 'again');
     setSelectedId(undefined);
   }

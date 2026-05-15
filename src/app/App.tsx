@@ -18,7 +18,7 @@ import { t } from '../i18n';
 type Route =
   | { name: 'home' }
   | { name: 'deck'; deckId: string }
-  | { name: 'study'; deckId: string }
+  | { name: 'study'; deckIds: string[]; tags: string[] }
   | { name: 'import' }
   | { name: 'stats' }
   | { name: 'help' };
@@ -126,6 +126,7 @@ export default function App() {
                 refreshKey={refreshKey}
                 onOpenDeck={(deckId) => setRoute({ name: 'deck', deckId })}
                 onChanged={refresh}
+                onCustomStudy={(deckIds, tags) => setRoute({ name: 'study', deckIds, tags })}
               />
             )}
 
@@ -134,15 +135,22 @@ export default function App() {
                 deckId={route.deckId}
                 refreshKey={refreshKey}
                 onBack={() => setRoute({ name: 'home' })}
-                onStudy={() => setRoute({ name: 'study', deckId: route.deckId })}
+                onStudy={() => setRoute({ name: 'study', deckIds: [route.deckId], tags: [] })}
                 onChanged={refresh}
               />
             )}
 
             {route.name === 'study' && (
               <StudyPage
-                deckId={route.deckId}
-                onBack={() => setRoute({ name: 'deck', deckId: route.deckId })}
+                deckIds={route.deckIds}
+                tags={route.tags}
+                onBack={() => {
+                    if (route.deckIds.length === 1) {
+                        setRoute({ name: 'deck', deckId: route.deckIds[0] });
+                    } else {
+                        setRoute({ name: 'home' });
+                    }
+                }}
                 onChanged={refresh}
               />
             )}
