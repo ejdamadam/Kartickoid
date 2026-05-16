@@ -284,6 +284,12 @@ h2 {
   color: #59615d;
 }
 
+.study-header-compact .pill {
+  min-width: 72px;
+  justify-content: center;
+  margin-left: auto;
+}
+
 .compact-tabs {
   margin-bottom: 0.75rem;
 }
@@ -430,6 +436,7 @@ h2 {
 .import-grid {
   display: grid;
   gap: 1rem;
+  max-width: 100%;
 }
 
 .deck-grid {
@@ -453,6 +460,10 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .card-preview-columns section {
@@ -460,6 +471,8 @@ h2 {
   flex-direction: column;
   gap: 0.5rem;
   align-items: flex-start;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .deck-card:hover,
@@ -1128,6 +1141,9 @@ h2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .card-text,
@@ -1195,6 +1211,9 @@ h2 {
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 0.65rem;
   margin: 0.75rem 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .image-form-section {
@@ -1300,27 +1319,28 @@ h2 {
   padding: 0.35rem;
   border-radius: 8px;
   touch-action: manipulation;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .audio-shell {
   position: relative;
   display: grid;
   gap: 0.35rem;
+  width: 100%;
+  max-width: 100%;
   min-height: 48px;
   padding: 0.25rem;
   margin: -0.25rem;
 }
 
 .audio-player {
+  display: block;
   width: 100%;
-}
-
-.audio-player-probe {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 44px;
 }
 
 .audio-status {

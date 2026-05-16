@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CardSide, Media } from '../types';
-import { canBrowserPlayAudio } from '../services/mediaProcessing';
 import ObjectImage from './ObjectImage';
 
 interface CardMediaListProps {
@@ -16,7 +15,11 @@ export default function CardMediaList({ media, side, onRemove }: CardMediaListPr
   return (
     <div className="media-grid">
       {items.map((item) => (
-        <figure key={item.id} className="media-item" onClick={(e) => e.stopPropagation()}>
+        <figure key={item.id} className="media-item" onClick={(e) => {
+          if (item.type === 'audio') {
+            e.stopPropagation();
+          }
+        }}>
           {item.type === 'audio' ? (
             <AudioPlayer media={item} />
           ) : (
@@ -36,16 +39,9 @@ export default function CardMediaList({ media, side, onRemove }: CardMediaListPr
 function AudioPlayer({ media }: { media: Media }) {
   const [url, setUrl] = useState<string>();
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const playable = useMemo(() => canBrowserPlayAudio(media.mimeType, media.name), [media.mimeType, media.name]);
 
   useEffect(() => {
     if (!media.blob || media.blob.size === 0) {
-      setState('error');
-      setUrl(undefined);
-      return;
-    }
-
-    if (!playable) {
       setState('error');
       setUrl(undefined);
       return;
@@ -58,7 +54,7 @@ function AudioPlayer({ media }: { media: Media }) {
     return () => {
       URL.revokeObjectURL(nextUrl);
     };
-  }, [media.blob, playable]);
+  }, [media.blob]);
 
   const meta = formatAudioMeta(media);
 
@@ -76,9 +72,9 @@ function AudioPlayer({ media }: { media: Media }) {
       {state === 'loading' && <p className="audio-status muted">Načítám zvuk…</p>}
       {url && (
         <audio
-          className={state === 'ready' ? 'audio-player' : 'audio-player-probe'}
+          className="audio-player"
           src={url}
-          controls={state === 'ready'}
+          controls
           preload="metadata"
           onCanPlay={() => setState('ready')}
           onLoadedMetadata={() => setState('ready')}

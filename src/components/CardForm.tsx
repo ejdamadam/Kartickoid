@@ -144,9 +144,19 @@ function AudioPreview({ media }: { media: PendingCardMedia }) {
     return () => URL.revokeObjectURL(nextUrl);
   }, [media.blob]);
 
-  if (!url) return <p className="muted">Načítám zvuk…</p>;
+  if (!url) return <p className="audio-status muted">Načítám zvuk…</p>;
 
-  return <audio src={url} controls autoPlay onClick={(e) => e.stopPropagation()} />;
+  return (
+    <div className="audio-shell">
+       <audio 
+         className="audio-player" 
+         src={url} 
+         controls 
+         autoPlay 
+         onClick={(e) => e.stopPropagation()} 
+       />
+    </div>
+  );
 }
 
 function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
@@ -176,12 +186,22 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
       const recordedChunks: Blob[] = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) recordedChunks.push(event.data);
+        if (event.data && event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
       };
       mediaRecorder.onstop = () => {
-        const finalMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const finalMimeType = normalizeRecordingMimeType(mediaRecorder.mimeType || (recordedChunks.length > 0 ? recordedChunks[0].type : '') || mimeType || fallbackRecordingMimeType());
+        
+        if (recordedChunks.length === 0) {
+          setRecordingError('Nahrávka neobsahuje žádná zvuková data. Zkuste ji prosím nahrát znovu.');
+          stream.getTracks().forEach((track) => track.stop());
+          setRecorder(null);
+          return;
+        }
+        
         const blob = new Blob(recordedChunks, { type: finalMimeType });
-        const fileExt = finalMimeType.includes('mp4') ? 'm4a' : finalMimeType.includes('ogg') ? 'ogg' : 'webm';
+        const fileExt = recordingExtension(finalMimeType);
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
         void onAdd([new File([blob], `nahravka-${stamp}.${fileExt}`, { type: finalMimeType })], side);
         stream.getTracks().forEach((track) => track.stop());
@@ -194,7 +214,7 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
         setRecorder(null);
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(200); // Send data every 200ms to avoid iOS issues
       setRecorder(mediaRecorder);
       setRecording(true);
     } catch {
@@ -206,10 +226,11 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
     if (recorder && recorder.state !== 'inactive') {
       try {
         recorder.requestData();
+        recorder.stop();
       } catch {
-        // Some mobile browsers throw if data is already being flushed.
+        // Fallback for some browsers
+        recorder.stop();
       }
-      recorder.stop();
     }
     setRecording(false);
   }
@@ -241,6 +262,26 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
 }
 
 function chooseRecordingMimeType(): string {
-  const candidates = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+  const candidates = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'video/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? '';
+}
+
+function fallbackRecordingMimeType(): string {
+  const userAgent = navigator.userAgent.toLowerCase();
+  return /iphone|ipad|ipod|safari/.test(userAgent) && !/chrome|crios|android/.test(userAgent)
+    ? 'audio/mp4'
+    : 'audio/webm';
+}
+
+function normalizeRecordingMimeType(value: string): string {
+  const normalized = value.toLowerCase().split(';')[0].trim();
+  if (normalized === 'video/mp4') return 'audio/mp4';
+  return normalized || fallbackRecordingMimeType();
+}
+
+function recordingExtension(mimeType: string): string {
+  if (mimeType.includes('mp4') || mimeType.includes('aac')) return 'm4a';
+  if (mimeType.includes('ogg')) return 'ogg';
+  if (mimeType.includes('wav')) return 'wav';
+  return 'webm';
 }
