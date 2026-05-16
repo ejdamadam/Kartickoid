@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../components/Modal';
 import DeckForm from '../components/DeckForm';
 import { createDeckInput, db, deleteDeckCascade } from '../db/database';
@@ -22,6 +22,7 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string>();
+  const pendingScrollY = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     let active = true;
@@ -47,6 +48,11 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
         };
       });
       setSummaries(nextSummaries.sort((a, b) => (b.lastReviewedAt ?? '').localeCompare(a.lastReviewedAt ?? '')));
+      if (pendingScrollY.current !== undefined) {
+        const scrollY = pendingScrollY.current;
+        pendingScrollY.current = undefined;
+        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      }
     });
     return () => { active = false; };
   }, [refreshKey]);
@@ -90,6 +96,7 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
   async function deleteDeck(deck: Deck) {
     const ok = window.confirm(t.deck.deleteConfirm(deck.name));
     if (!ok) return;
+    pendingScrollY.current = window.scrollY;
     try {
       await deleteDeckCascade(deck.id);
       onChanged();

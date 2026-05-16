@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import JSZip from 'jszip';
 import { createCardInput, createDeckInput, db, addMediaToCard } from '../db/database';
-import { importBackupFile } from '../services/exportImport';
+import { downloadBackup, formatImportSummary, importBackupFile, shareBackup, type ImportMode } from '../services/exportImport';
 import { previewCsvCards, parseCsvCards } from '../services/importers/csvImporter';
 import { previewMarkdownCards } from '../services/importers/markdownImporter';
 import { importAnkiXml } from '../services/importers/ankiImporter';
@@ -25,6 +25,7 @@ export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportP
   const [tab, setTab] = useState<ImportTab>('json');
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
+  const [jsonImportSettings, setJsonImportSettings] = useState(false);
   const [csvText, setCsvText] = useState('');
   const [csvFileName, setCsvFileName] = useState('');
   const [csvMapping, setCsvMapping] = useState({ front: 'front', back: 'back', tags: 'tags', image: 'image' });
@@ -49,14 +50,46 @@ export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportP
   const csvPreview = useMemo(() => csvText ? previewCsvCards(csvText, csvMapping) : emptyPreview, [csvText, csvMapping]);
   const markdownPreview = useMemo(() => markdownText ? previewMarkdownCards(markdownText) : { deckName: undefined, preview: emptyPreview }, [markdownText]);
 
-  async function handleJson(file?: File) {
+  async function handleJson(mode: ImportMode, file?: File) {
     if (!file) return;
     setError(undefined);
+    setMessage(undefined);
+
+    if (mode === 'hard') {
+      const ok = window.confirm('Tento režim přidá celý obsah JSONu k aktuálním datům a může vytvořit duplicity. Pokračovat?');
+      if (!ok) return;
+    }
+
+    if (mode === 'reset') {
+      const ok = window.confirm('Tento krok smaže aktuální lokální data a nahradí je obsahem zálohy. Před obnovou se stáhne bezpečnostní snapshot aktuálního stavu. Pokračovat?');
+      if (!ok) return;
+    }
+
     try {
-      const result = await importBackupFile(file);
-      setMessage(t.import.importedJson(result.decks, result.cards, result.media, result.reviewLogs));
+      const result = await importBackupFile(file, {
+        mode,
+        importSettings: mode === 'soft' || mode === 'reset' || jsonImportSettings,
+        createSafetySnapshot: mode === 'reset'
+      });
+      setMessage(formatImportSummary(result));
       await loadDecks();
       onChanged();
+      if (mode === 'reset') {
+        window.setTimeout(() => window.location.reload(), 600);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  async function handleShareBackup() {
+    setError(undefined);
+    setMessage(undefined);
+    try {
+      const result = await shareBackup();
+      setMessage(result === 'shared'
+        ? 'Sdílení JSON zálohy bylo otevřeno.'
+        : 'Sdílení není v tomto prohlížeči dostupné, záloha byla stažena jako soubor.');
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     }
@@ -195,13 +228,43 @@ export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportP
       )}
 
       {tab === 'json' && (
-        <section className="panel">
-          <h2>{t.import.jsonTitle}</h2>
-          <p>{t.import.jsonBody}</p>
-          <label className="upload-button wide">
-            {t.import.chooseJson}
-            <input type="file" accept="application/json,.json" onChange={(event) => handleJson(event.target.files?.[0])} />
+        <section className="panel stack">
+          <h2>Záloha a import JSON</h2>
+          <p>JSON záloha obsahuje sady, kartičky, média včetně audio dat, metadata médií, historii učení, progress kartiček a nastavení aplikace.</p>
+          <div className="button-row">
+            <button className="primary-button" type="button" onClick={downloadBackup}>Exportovat JSON</button>
+            <button className="secondary-button" type="button" onClick={handleShareBackup}>Sdílet JSON</button>
+          </div>
+
+          <JsonImportAction
+            title="Soft import — sloučit bez duplicit"
+            description="Zkontroluje existující data a přidá jen nové nebo novější změny."
+            buttonLabel="Vybrat JSON pro soft import"
+            onFile={(file) => handleJson('soft', file)}
+          />
+
+          <JsonImportAction
+            title="Hard import — přidat vše z JSONu"
+            description="Přidá celý obsah JSONu k aktuálním datům. Může vytvořit duplicity."
+            buttonLabel="Vybrat JSON pro hard import"
+            onFile={(file) => handleJson('hard', file)}
+          />
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={jsonImportSettings}
+              onChange={(event) => setJsonImportSettings(event.target.checked)}
+            />
+            Importovat při hard importu také nastavení aplikace
           </label>
+
+          <JsonImportAction
+            title="Reset / Obnovit ze zálohy"
+            description="Nahradí celý aktuální stav aplikace obsahem zálohy."
+            buttonLabel="Vybrat JSON pro obnovu"
+            danger
+            onFile={(file) => handleJson('reset', file)}
+          />
         </section>
       )}
 
@@ -269,6 +332,33 @@ export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportP
     </section>
   );
 }
+
+function JsonImportAction({ title, description, buttonLabel, danger, onFile }: {
+  title: string;
+  description: string;
+  buttonLabel: string;
+  danger?: boolean;
+  onFile: (file?: File) => void;
+}) {
+  return (
+    <div className={`preview-row ${danger ? 'invalid' : ''}`}>
+      <strong>{title}</strong>
+      <span>{description}</span>
+      <label className={`upload-button wide ${danger ? 'danger-button' : ''}`}>
+        {buttonLabel}
+        <input
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => {
+            onFile(event.target.files?.[0]);
+            event.currentTarget.value = '';
+          }}
+        />
+      </label>
+    </div>
+  );
+}
+
 
 function PreviewBlock({ preview }: { preview: ImportPreview }) {
   const valid = preview.cards.filter((card) => card.errors.length === 0).length;

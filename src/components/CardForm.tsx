@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent, useEffect } from 'react';
 import type { Card, CardSide, PendingCardMedia } from '../types';
 import { db } from '../db/database';
-import { processMediaForCard } from '../services/mediaProcessing';
+import { AUDIO_FILE_ACCEPT, processMediaForCard } from '../services/mediaProcessing';
 import { t } from '../i18n';
 import ObjectImage from './ObjectImage';
 import TagInput from './TagInput';
@@ -58,6 +58,8 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
     setSaving(true);
     try {
       await onSubmit({ frontText, backText, tags, media });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
     } finally {
       setSaving(false);
     }
@@ -126,38 +128,89 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
 
       {preview && (
         <div className="image-lightbox" onClick={() => setPreview(undefined)}>
-          {preview.type === 'audio' ? <audio src={URL.createObjectURL(preview.blob)} controls autoPlay onClick={(e) => e.stopPropagation()} /> : <ObjectImage blob={preview.blob} alt={preview.name} />}
+          {preview.type === 'audio' ? <AudioPreview media={preview} /> : <ObjectImage blob={preview.blob} alt={preview.name} />}
         </div>
       )}
     </form>
   );
 }
 
-function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: { side: CardSide, media: PendingCardMedia[], onAdd: any, onRemove: any, onMove: any, onPreview: any }) {
+function AudioPreview({ media }: { media: PendingCardMedia }) {
+  const [url, setUrl] = useState<string>();
+
+  useEffect(() => {
+    const nextUrl = URL.createObjectURL(media.blob);
+    setUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [media.blob]);
+
+  if (!url) return <p className="muted">Načítám zvuk…</p>;
+
+  return <audio src={url} controls autoPlay onClick={(e) => e.stopPropagation()} />;
+}
+
+function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
+  side: CardSide;
+  media: PendingCardMedia[];
+  onAdd: (files: FileList | File[], side: CardSide) => Promise<void>;
+  onRemove: (id: string) => void;
+  onMove: (id: string, direction: -1 | 1) => void;
+  onPreview: (media: PendingCardMedia) => void;
+}) {
   const [recording, setRecording] = useState(false);
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
-  const [chunks, setChunks] = useState<Blob[]>([]);
+  const [recordingError, setRecordingError] = useState<string>();
 
   async function startRecording() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    // Prefer audio/mp4 (AAC) if supported, else webm
-    const mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
-    const mediaRecorder = new MediaRecorder(stream, { mimeType });
-    setChunks([]);
-    mediaRecorder.ondataavailable = (e) => setChunks((c) => [...c, e.data]);
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunks, { type: mimeType });
-      const fileExt = mimeType === 'audio/mp4' ? 'm4a' : 'webm';
-      onAdd([new File([blob], `recording.${fileExt}`, { type: mimeType })], side);
-      stream.getTracks().forEach(track => track.stop());
-    };
-    mediaRecorder.start();
-    setRecorder(mediaRecorder);
-    setRecording(true);
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setRecordingError('Prohlížeč nepodporuje nahrávání zvuku.');
+      return;
+    }
+
+    try {
+      setRecordingError(undefined);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = chooseRecordingMimeType();
+      const options = mimeType ? { mimeType } : undefined;
+      const mediaRecorder = new MediaRecorder(stream, options);
+      const recordedChunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordedChunks.push(event.data);
+      };
+      mediaRecorder.onstop = () => {
+        const finalMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(recordedChunks, { type: finalMimeType });
+        const fileExt = finalMimeType.includes('mp4') ? 'm4a' : finalMimeType.includes('ogg') ? 'ogg' : 'webm';
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        void onAdd([new File([blob], `nahravka-${stamp}.${fileExt}`, { type: finalMimeType })], side);
+        stream.getTracks().forEach((track) => track.stop());
+        setRecorder(null);
+      };
+      mediaRecorder.onerror = () => {
+        setRecordingError('Nahrávání se nepovedlo. Zkuste to prosím znovu.');
+        stream.getTracks().forEach((track) => track.stop());
+        setRecording(false);
+        setRecorder(null);
+      };
+
+      mediaRecorder.start();
+      setRecorder(mediaRecorder);
+      setRecording(true);
+    } catch {
+      setRecordingError('Mikrofon se nepodařilo zpřístupnit.');
+    }
   }
 
   function stopRecording() {
-    recorder?.stop();
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.requestData();
+      } catch {
+        // Some mobile browsers throw if data is already being flushed.
+      }
+      recorder.stop();
+    }
     setRecording(false);
   }
 
@@ -165,11 +218,12 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: { si
     <section className="image-form-section">
       <div className="upload-buttons">
         <label className="upload-button">Obrázek<input type="file" accept="image/*" multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
-        <label className="upload-button">Zvuk<input type="file" accept="audio/*,audio/mp4" multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
+        <label className="upload-button">Zvuk<input type="file" accept={AUDIO_FILE_ACCEPT} multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
         <button className="upload-button" type="button" onClick={recording ? stopRecording : startRecording} style={{ background: recording ? '#f44336' : '#eee' }}>
             {recording ? 'Stop' : 'Nahrát zvuk'}
         </button>
       </div>
+      {recordingError && <p className="error-box">{recordingError}</p>}
       <div className="pending-image-grid">
         {media.map((item, index) => (
           <figure className="pending-image" key={item.id}>
@@ -184,4 +238,9 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: { si
       </div>
     </section>
   );
+}
+
+function chooseRecordingMimeType(): string {
+  const candidates = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? '';
 }

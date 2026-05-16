@@ -7,9 +7,15 @@ export interface StudyFilter {
   tags: string[];
 }
 
+export interface StudySessionOptions {
+  limit?: number;
+  order?: 'default' | 'random';
+}
+
 export async function loadStudyCards(
   filter: StudyFilter, 
-  source: StudySessionSource
+  source: StudySessionSource,
+  options: StudySessionOptions = {}
 ): Promise<Card[]> {
   const { deckIds, tags } = filter;
   
@@ -27,15 +33,20 @@ export async function loadStudyCards(
 
   const now = new Date();
 
+  let selected: Card[];
+
   switch (source) {
     case 'all':
-      return cards.sort(sortByDueThenUpdated);
+      selected = cards.sort(sortByDueThenUpdated);
+      break;
     case 'lapsed':
-      return cards
+      selected = cards
         .filter((card) => card.lapses > 0 || card.ease <= 1.8)
         .sort(sortByDueThenUpdated);
+      break;
     case 'random':
-      return takeRandom(cards, Math.min(cards.length, 20));
+      selected = takeRandom(cards, Math.min(cards.length, options.limit || 20));
+      break;
     case 'mistakes': {
       let logCollection = db.reviewLogs.toCollection();
       if (deckIds.length > 0) {
@@ -48,14 +59,27 @@ export async function loadStudyCards(
         .limit(50)
         .toArray();
       const mistakeIds = new Set(mistakeLogs.map((log) => log.cardId));
-      return cards.filter((card) => mistakeIds.has(card.id)).sort(sortByDueThenUpdated);
+      selected = cards.filter((card) => mistakeIds.has(card.id)).sort(sortByDueThenUpdated);
+      break;
     }
+    case 'new':
+      selected = cards
+        .filter((card) => card.repetitions === 0 && card.lapses === 0)
+        .sort(sortByDueThenUpdated);
+      break;
     case 'due':
     default:
-      return cards
+      selected = cards
         .filter((card) => new Date(card.dueAt) <= now)
         .sort(sortByDueThenUpdated);
+      break;
   }
+
+  const ordered = options.order === 'random' && source !== 'random'
+    ? takeRandom(selected, selected.length)
+    : selected;
+
+  return options.limit && options.limit > 0 ? ordered.slice(0, options.limit) : ordered;
 }
 
 export function sortByDueThenUpdated(a: Card, b: Card): number {

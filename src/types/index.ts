@@ -6,7 +6,7 @@ export type Rating = 'again' | 'hard' | 'good' | 'easy';
 
 export type StudyMode = 'learning' | 'test' | 'writing';
 
-export type StudySessionSource = 'due' | 'all' | 'lapsed' | 'random' | 'mistakes';
+export type StudySessionSource = 'due' | 'all' | 'lapsed' | 'mistakes' | 'new' | 'random';
 
 export interface Deck {
   id: EntityId;
@@ -43,6 +43,8 @@ export interface Media {
   mimeType: string;
   type: MediaType;
   name: string;
+  size?: number;
+  durationSeconds?: number;
   createdAt: string;
 }
 
@@ -53,6 +55,8 @@ export interface PendingCardMedia {
   mimeType: string;
   type: MediaType;
   name: string;
+  size?: number;
+  durationSeconds?: number;
   createdAt: string;
 }
 
@@ -68,6 +72,17 @@ export interface AppMeta {
   key: string;
   value: unknown;
   updatedAt: string;
+}
+
+export interface BackupHistoryEntry {
+  id: EntityId;
+  name: string;
+  reason: 'manual' | 'share' | 'reset-safety';
+  blob: Blob;
+  size: number;
+  appVersion: string;
+  schemaVersion: number;
+  createdAt: string;
 }
 
 export interface DeckSummary {
@@ -87,11 +102,18 @@ export interface ExportMedia {
   dataUrl: string;
   mimeType: string;
   name: string;
+  size?: number;
+  durationSeconds?: number;
   createdAt: string;
 }
 
 export interface BackupFile {
-  version: 1 | 2;
+  version?: 1 | 2 | 3;
+  schemaVersion?: 1 | 2 | 3;
+  appVersion?: string;
+  exportDate?: string;
+  exportId?: string;
+  mediaIncludesBlobs?: boolean;
   exportedAt: string;
   decks: Deck[];
   cards: Card[];

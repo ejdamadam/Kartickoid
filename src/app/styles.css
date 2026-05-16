@@ -1,12 +1,13 @@
 :root {
-  --primary-color: var(--primary-color);
+  --primary-color: #26312d;
   --primary-rgb: 38, 49, 45;
-  --bg-color: var(--bg-color);
+  --bg-color: #f7f5ef;
   --bg-rgb: 247, 245, 239;
+  --app-font-size: 16px;
   color: var(--primary-color);
   background: var(--bg-color);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 16px;
+  font-size: var(--app-font-size);
   line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -17,6 +18,7 @@
 }
 
 body {
+  position: relative;
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
@@ -24,6 +26,33 @@ body {
     radial-gradient(circle at top left, rgba(var(--primary-rgb), 0.14), transparent 280px),
     linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(var(--bg-rgb), 0) 360px),
     var(--bg-color);
+}
+
+body.has-custom-background {
+  background: var(--bg-color);
+}
+
+body.has-custom-background::before,
+body.has-custom-background::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+body.has-custom-background::before {
+  z-index: 0;
+  background-image: var(--custom-background-image);
+  background-size: cover;
+  background-position: center;
+  filter: blur(2px) saturate(0.95);
+  transform: scale(1.02);
+}
+
+body.has-custom-background::after {
+  z-index: 0;
+  background: rgba(247, 245, 239, 0.76);
+  backdrop-filter: blur(1px);
 }
 
 button,
@@ -90,6 +119,8 @@ h2 {
 }
 
 .app-shell {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -620,6 +651,14 @@ h2 {
   font-weight: 900;
 }
 
+.drawer-version {
+  margin: 0;
+  color: #717873;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
+}
+
 .mode-tabs button,
 .segmented button {
   border-radius: 8px;
@@ -769,6 +808,49 @@ h2 {
 .choice-button.wrong {
   border-color: #efb094;
   background: #fff3ed;
+}
+
+.study-options-panel {
+  margin: 1rem 0 1.25rem;
+}
+
+.study-option-grid,
+.study-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.study-option-grid .choice-button {
+  align-content: start;
+}
+
+.compact-select {
+  min-width: min(100%, 260px);
+  font-size: 0.85rem;
+}
+
+.activity-table {
+  display: grid;
+  gap: 0.35rem;
+  overflow-x: auto;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.35fr) repeat(5, minmax(96px, 1fr));
+  gap: 0.6rem;
+  align-items: center;
+  min-width: 760px;
+  border-bottom: 1px solid #e6dfd3;
+  padding: 0.55rem 0;
+}
+
+.activity-head {
+  color: #717873;
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .answer-detail,
@@ -1204,6 +1286,37 @@ h2 {
   margin: 0;
 }
 
+.audio-shell {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  min-height: 48px;
+}
+
+.audio-player {
+  width: 100%;
+}
+
+.audio-player-probe {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.audio-status {
+  margin: 0;
+}
+
+.audio-status small,
+.media-meta {
+  display: block;
+  color: #717873;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .card-image {
   width: 100%;
   max-height: 320px;
@@ -1228,6 +1341,59 @@ h2 {
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+.settings-segmented {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.settings-background-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.checkbox-row {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 0.65rem;
+  color: #59615d;
+}
+
+.checkbox-row input {
+  width: auto;
+  min-width: 18px;
+}
+
+.backup-history-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.backup-history-list .section-title {
+  margin: 0.35rem 0 0;
+}
+
+.backup-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  border: 1px solid #d8d3c7;
+  border-radius: 8px;
+  background: #fffdf8;
+  padding: 0.75rem;
+}
+
+.backup-history-row small {
+  display: block;
+  color: #717873;
+  font-weight: 800;
+}
+
+.muted {
+  color: #717873;
 }
 
 .stack {
@@ -1344,11 +1510,21 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .study-controls-grid,
+  .study-option-grid,
+  .backup-history-row {
+    grid-template-columns: 1fr;
+  }
+
   .filters {
     gap: 0.9rem;
   }
 
   .mode-tabs.import-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-segmented {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

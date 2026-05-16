@@ -14,11 +14,13 @@ import { downloadBackup } from '../services/exportImport';
 import { db } from '../db/database';
 import { nowIso } from '../utils/date';
 import { t } from '../i18n';
+import { APP_VERSION } from './version';
+import type { StudySessionSource } from '../types';
 
 type Route =
   | { name: 'home' }
   | { name: 'deck'; deckId: string }
-  | { name: 'study'; deckIds: string[]; tags: string[] }
+  | { name: 'study'; deckIds: string[]; tags: string[]; source?: StudySessionSource; limit?: number; order?: 'default' | 'random' }
   | { name: 'import' }
   | { name: 'stats' }
   | { name: 'help' };
@@ -79,7 +81,7 @@ export default function App() {
 
       {modal && (
           <Modal title={modal === 'settings' ? 'Nastavení' : 'O aplikaci'} onClose={() => setModal(undefined)}>
-              {modal === 'settings' ? <SettingsModal onClose={() => setModal(undefined)} /> : <p>Kartičkoid v0.42.0</p>}
+              {modal === 'settings' ? <SettingsModal onClose={() => setModal(undefined)} /> : <p>Kartičkoid v{APP_VERSION}</p>}
           </Modal>
       )}
       
@@ -114,7 +116,7 @@ export default function App() {
                 deckId={route.deckId}
                 refreshKey={refreshKey}
                 onBack={() => setRoute({ name: 'home' })}
-                onStudy={() => setRoute({ name: 'study', deckIds: [route.deckId], tags: [] })}
+                onStudy={(options) => setRoute({ name: 'study', deckIds: [route.deckId], tags: [], ...options })}
                 onChanged={refresh}
               />
             )}
@@ -123,6 +125,9 @@ export default function App() {
               <StudyPage
                 deckIds={route.deckIds}
                 tags={route.tags}
+                initialSource={route.source}
+                initialLimit={route.limit}
+                initialOrder={route.order}
                 onBack={() => {
                     if (route.deckIds.length === 1) {
                         setRoute({ name: 'deck', deckId: route.deckIds[0] });

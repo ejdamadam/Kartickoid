@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import packageJson from './package.json';
 
 export default defineConfig({
   base: '/Kartickoid/',
+  define: {
+    __APP_VERSION__: JSON.stringify(packageJson.version)
+  },
   build: {
     target: 'es2015'
   },

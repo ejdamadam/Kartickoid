@@ -11,12 +11,22 @@ interface StatsPageProps {
 export default function StatsPage({ onBack }: StatsPageProps) {
   const [stats, setStats] = useState<StatsOverview>();
   const [error, setError] = useState<string>();
+  const [deckSort, setDeckSort] = useState<'last' | 'worst' | 'most' | 'hard'>('last');
 
   useEffect(() => {
     getStatsOverview().then(setStats).catch((err) => setError(err instanceof Error ? err.message : t.common.error));
   }, []);
 
   const maxWeek = useMemo(() => Math.max(1, ...(stats?.weeklyActivity.map((day) => day.count) ?? [1])), [stats]);
+  const sortedDeckActivity = useMemo(() => {
+    const items = [...(stats?.deckActivity ?? [])];
+    return items.sort((a, b) => {
+      if (deckSort === 'worst') return a.successRate - b.successRate || b.answeredCount - a.answeredCount;
+      if (deckSort === 'most') return b.answeredCount - a.answeredCount;
+      if (deckSort === 'hard') return b.hardCards - a.hardCards;
+      return (b.lastReviewedAt ?? '').localeCompare(a.lastReviewedAt ?? '');
+    });
+  }, [deckSort, stats]);
 
   return (
     <section className="page">
@@ -67,6 +77,43 @@ export default function StatsPage({ onBack }: StatsPageProps) {
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="panel stack">
+            <div className="section-title">
+              <h2>Aktivita podle balíčků</h2>
+              <label className="compact-select">
+                Řadit
+                <select value={deckSort} onChange={(event) => setDeckSort(event.target.value as typeof deckSort)}>
+                  <option value="last">poslední aktivita</option>
+                  <option value="worst">nejhorší úspěšnost</option>
+                  <option value="most">nejvíce procvičováno</option>
+                  <option value="hard">nejvíce těžkých</option>
+                </select>
+              </label>
+            </div>
+            {sortedDeckActivity.length === 0 ? <p className="muted">{t.stats.noData}</p> : (
+              <div className="activity-table">
+                <div className="activity-row activity-head">
+                  <span>Balíček</span>
+                  <span>Odpovědi</span>
+                  <span>Správně / špatně</span>
+                  <span>Úspěšnost</span>
+                  <span>Těžké</span>
+                  <span>Poslední aktivita</span>
+                </div>
+                {sortedDeckActivity.map((deck) => (
+                  <div className="activity-row" key={deck.deckId}>
+                    <strong>{deck.deckName}</strong>
+                    <span>{deck.answeredCount}</span>
+                    <span>{deck.correctAnswers} / {deck.wrongAnswers}</span>
+                    <span>{deck.successRate} %</span>
+                    <span>{deck.hardCards}</span>
+                    <span>{deck.lastReviewedAt ? formatDateTime(deck.lastReviewedAt) : t.common.never}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <div className="stats-columns">

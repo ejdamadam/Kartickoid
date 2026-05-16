@@ -6,12 +6,12 @@ import RichTextDisplay from '../components/RichTextDisplay';
 import Modal from '../components/Modal';
 import CardStatistics from '../components/CardStatistics';
 import { addMediaToCard, createCardInput, db, deleteCardCascade, removeMediaFromCard } from '../db/database';
-import { processMediaForCard } from '../services/mediaProcessing';
+import { AUDIO_FILE_ACCEPT, processMediaForCard } from '../services/mediaProcessing';
 import { cardsToCsv } from '../services/exporters/csvExporter';
 import { downloadDeckBackup } from '../services/exportImport';
 import { getDeckStats, type DeckStats } from '../services/stats';
-import type { Card, CardSide, Deck, Media, ReviewLog } from '../types';
-import { formatDate, nowIso, startOfTodayIso } from '../utils/date';
+import type { Card, CardSide, Deck, Media, ReviewLog, StudySessionSource } from '../types';
+import { formatDate, formatDateTime, nowIso, startOfTodayIso } from '../utils/date';
 import { t } from '../i18n';
 import { createId } from '../utils/id';
 
@@ -19,11 +19,12 @@ interface DeckPageProps {
   deckId: string;
   refreshKey: number;
   onBack: () => void;
-  onStudy: () => void;
+  onStudy: (options?: { source?: StudySessionSource; limit?: number; order?: 'default' | 'random' }) => void;
   onChanged: () => void;
 }
 
 type EditableCard = Card | 'new';
+type DeckStudySource = Extract<StudySessionSource, 'all' | 'lapsed' | 'mistakes' | 'new' | 'due'>;
 
 export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChanged }: DeckPageProps) {
   const [deck, setDeck] = useState<Deck>();
@@ -38,6 +39,9 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'list' | 'stats'>('list');
   const [deckStats, setDeckStats] = useState<DeckStats>();
+  const [studySource, setStudySource] = useState<DeckStudySource>('all');
+  const [studyLimit, setStudyLimit] = useState(0);
+  const [studyOrder, setStudyOrder] = useState<'default' | 'random'>('default');
 
   useEffect(() => {
     let active = true;
@@ -83,6 +87,18 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
       fresh: cards.filter((card) => card.repetitions === 0 && card.lapses === 0).length,
       reviewedToday: logs.filter((log) => log.reviewedAt >= today).length
     };
+  }, [cards, logs]);
+
+  const studyCounts = useMemo(() => {
+    const mistakeIds = new Set(logs.filter((log) => log.rating === 'again' || log.rating === 'hard').map((log) => log.cardId));
+    const now = new Date();
+    return {
+      all: cards.length,
+      due: cards.filter((card) => new Date(card.dueAt) <= now).length,
+      lapsed: cards.filter((card) => card.lapses > 0 || card.ease <= 1.8).length,
+      mistakes: cards.filter((card) => mistakeIds.has(card.id)).length,
+      new: cards.filter((card) => card.repetitions === 0 && card.lapses === 0).length
+    } satisfies Record<DeckStudySource, number>;
   }, [cards, logs]);
 
   const allTags = useMemo(() => (
@@ -283,6 +299,17 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
     }
   }
 
+  function startStudy() {
+    const count = studyCounts[studySource];
+    if (count === 0) {
+      setError(emptyStudyMessage(studySource));
+      return;
+    }
+
+    setError(undefined);
+    onStudy({ source: studySource, limit: studyLimit, order: studyOrder });
+  }
+
   if (!deck && !loading) {
     return (
       <section className="page">
@@ -304,7 +331,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
           {deck?.description && <p className="lead">{deck.description}</p>}
         </div>
         <div className="toolbar">
-          <button className="primary-button" onClick={onStudy}>{t.deck.study}</button>
+          <button className="primary-button" onClick={startStudy}>{t.deck.study}</button>
           <button className="secondary-button" onClick={() => setEditingCard('new')}>{t.deck.newCard}</button>
           <button className="secondary-button" onClick={() => setBulkOpen(true)}>{t.deck.bulkEditor}</button>
           <button className="secondary-button" onClick={exportCsv}>{t.deck.csvExport}</button>
@@ -321,6 +348,44 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         <span><strong>{stats.fresh}</strong> {t.deck.fresh}</span>
         <span><strong>{stats.reviewedToday}</strong> {t.deck.reviewedToday}</span>
       </div>
+
+      <section className="panel stack study-options-panel">
+        <div className="section-title">
+          <h2>Volby procvičování</h2>
+          <span>{studyCounts[studySource]} dostupných</span>
+        </div>
+        <div className="study-option-grid">
+          {studySourceOptions.map((option) => (
+            <button
+              type="button"
+              key={option.value}
+              className={`choice-button ${studySource === option.value ? 'correct' : ''}`}
+              onClick={() => setStudySource(option.value)}
+            >
+              <strong>{option.label}</strong>
+              <small>{studyCounts[option.value]} kartiček</small>
+            </button>
+          ))}
+        </div>
+        <div className="study-controls-grid">
+          <label>
+            Počet kartiček
+            <select value={studyLimit} onChange={(event) => setStudyLimit(Number(event.target.value))}>
+              <option value={0}>Všechny dostupné</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+          </label>
+          <label>
+            Pořadí
+            <select value={studyOrder} onChange={(event) => setStudyOrder(event.target.value as 'default' | 'random')}>
+              <option value="default">Výchozí</option>
+              <option value="random">Náhodné</option>
+            </select>
+          </label>
+        </div>
+      </section>
 
       <div className="mode-tabs narrow">
         <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>Kartičky</button>
@@ -413,8 +478,16 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
               </section>
               
               <section className="panel">
+                <div className="stats-row">
+                  <span><strong>{deckStats.cardCount}</strong> kartiček</span>
+                  <span><strong>{deckStats.practicedCards}</strong> procvičeno</span>
+                  <span><strong>{deckStats.correctAnswers}</strong> správně</span>
+                  <span><strong>{deckStats.wrongAnswers}</strong> špatně</span>
+                  <span><strong>{deckStats.successRate} %</strong> úspěšnost</span>
+                  <span><strong>{deckStats.hardCards}</strong> těžkých</span>
+                </div>
                 <p>Celkový počet opakování: <strong>{deckStats.totalRepetitions}</strong></p>
-                <p>Průměrná úspěšnost: <strong>{deckStats.successRate} %</strong></p>
+                <p>Poslední procvičování: <strong>{deckStats.lastReviewedAt ? formatDateTime(deckStats.lastReviewedAt) : t.common.never}</strong></p>
               </section>
             </>
           ) : <p>Načítám statistiky...</p>}
@@ -449,11 +522,30 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   );
 }
 
+const studySourceOptions: Array<{ value: DeckStudySource; label: string }> = [
+  { value: 'all', label: 'Všechny kartičky' },
+  { value: 'lapsed', label: 'Těžké kartičky' },
+  { value: 'mistakes', label: 'Špatně zodpovězené' },
+  { value: 'new', label: 'Nové kartičky' },
+  { value: 'due', label: 'K opakování dnes' }
+];
+
+function emptyStudyMessage(source: DeckStudySource): string {
+  const labels: Record<DeckStudySource, string> = {
+    all: 'V tomto balíčku zatím nejsou žádné kartičky.',
+    lapsed: 'V tomto balíčku zatím nejsou žádné těžké kartičky.',
+    mistakes: 'V tomto balíčku zatím nejsou žádné špatně zodpovězené kartičky.',
+    new: 'V tomto balíčku zatím nejsou žádné nové kartičky.',
+    due: 'V tomto balíčku teď nejsou žádné kartičky k opakování.'
+  };
+  return labels[source];
+}
+
 function MediaUploadButtonToolbar({ card, side, onUpload }: { card: Card; side: CardSide, onUpload: (card: Card, side: CardSide, file?: File) => void }) {
   return (
     <div className="media-upload-toolbar">
       <MediaUploadButton label={'Obrázek'} accept="image/*" onFile={(file) => onUpload(card, side, file)} />
-      <MediaUploadButton label={'Zvuk'} accept="audio/*" onFile={(file) => onUpload(card, side, file)} />
+      <MediaUploadButton label={'Zvuk'} accept={AUDIO_FILE_ACCEPT} onFile={(file) => onUpload(card, side, file)} />
     </div>
   );
 }

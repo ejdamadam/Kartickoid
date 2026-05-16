@@ -14,6 +14,9 @@ import { t } from '../i18n';
 interface StudyPageProps {
   deckIds: string[];
   tags: string[];
+  initialSource?: StudySessionSource;
+  initialLimit?: number;
+  initialOrder?: 'default' | 'random';
   onBack: () => void;
   onChanged: () => void;
 }
@@ -29,17 +32,18 @@ const sourceLabels: Record<StudySessionSource, string> = {
   all: t.study.all,
   lapsed: t.study.lapsed,
   random: t.study.random,
-  mistakes: t.study.mistakes
+  mistakes: t.study.mistakes,
+  new: 'Nové kartičky'
 };
 
-export default function StudyPage({ deckIds, tags, onBack, onChanged }: StudyPageProps) {
+export default function StudyPage({ deckIds, tags, initialSource = 'due', initialLimit = 0, initialOrder = 'default', onBack, onChanged }: StudyPageProps) {
   const [deckNames, setDeckNames] = useState<string[]>([]);
   const [allCards, setAllCards] = useState<Card[]>([]);
   const [queue, setQueue] = useState<Card[]>([]);
   const [media, setMedia] = useState<Media[]>([]);
   const [index, setIndex] = useState(0);
   const [mode, setMode] = useState<StudyMode>('learning');
-  const [source, setSource] = useState<StudySessionSource>('due');
+  const [source, setSource] = useState<StudySessionSource>(initialSource);
   const [revealed, setRevealed] = useState(false);
   const [sessionKey, setSessionKey] = useState(0);
   const [completed, setCompleted] = useState(0);
@@ -47,7 +51,8 @@ export default function StudyPage({ deckIds, tags, onBack, onChanged }: StudyPag
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
 
-  const [limit, setLimit] = useState<number>(0); 
+  const [limit, setLimit] = useState<number>(initialLimit);
+  const [order, setOrder] = useState<'default' | 'random'>(initialOrder);
 
   useEffect(() => {
     let active = true;
@@ -57,21 +62,18 @@ export default function StudyPage({ deckIds, tags, onBack, onChanged }: StudyPag
     
     Promise.all([
       db.decks.where('id').anyOf(deckIds).toArray(),
-      loadStudyCards(filter, source),
+      loadStudyCards(filter, source, { limit, order }),
+      db.cards.where('deckId').anyOf(deckIds).toArray(),
       db.media.toArray()
     ])
-      .then(([decks, sessionCards, allMedia]) => {
+      .then(([decks, sessionCards, deckCards, allMedia]) => {
         if (!active) return;
         setDeckNames(decks.map(d => d.name));
-        
-        db.cards.where('deckId').anyOf(deckIds).toArray().then(deckCards => {
-            if (!active) return;
-            setAllCards(deckCards);
-            setMedia(allMedia.filter((item) => deckCards.some((card) => card.id === item.cardId)));
-        });
+        const deckCardIds = new Set(deckCards.map((card) => card.id));
+        setAllCards(deckCards);
+        setMedia(allMedia.filter((item) => deckCardIds.has(item.cardId)));
 
-        const finalQueue = limit > 0 ? sessionCards.slice(0, limit) : sessionCards;
-        setQueue(finalQueue);
+        setQueue(sessionCards);
         
         setIndex(0);
         setCompleted(0);
@@ -88,7 +90,7 @@ export default function StudyPage({ deckIds, tags, onBack, onChanged }: StudyPag
     return () => {
       active = false;
     };
-  }, [deckIds, tags, source, sessionKey, limit]);
+  }, [deckIds, tags, source, sessionKey, limit, order]);
 
   const dueCount = useMemo(() => {
     const now = new Date();
@@ -183,6 +185,8 @@ export default function StudyPage({ deckIds, tags, onBack, onChanged }: StudyPag
               mistakes={mistakeIds.length}
               limit={limit}
               setLimit={setLimit}
+              order={order}
+              setOrder={setOrder}
               onBack={onBack}
               onStart={startSession}
               onRetryMistakes={retryMistakes}
@@ -462,13 +466,15 @@ function WritingMode({ card, media, onRate }: {
   );
 }
 
-function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, onBack, onStart, onRetryMistakes }: {
+function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, order, setOrder, onBack, onStart, onRetryMistakes }: {
   total: number;
   dueCount: number;
   completed: number;
   mistakes: number;
   limit: number;
   setLimit: (limit: number) => void;
+  order: 'default' | 'random';
+  setOrder: (order: 'default' | 'random') => void;
   onBack: () => void;
   onStart: (source: StudySessionSource, mode?: StudyMode) => void;
   onRetryMistakes: () => void;
@@ -490,6 +496,14 @@ function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, o
               {val === 0 ? 'Vše' : val}
             </button>
           ))}
+        </div>
+      </div>
+
+      <div className="limit-selector">
+        <p className="side-label">Pořadí</p>
+        <div className="segmented">
+          <button className={order === 'default' ? 'active' : ''} onClick={() => setOrder('default')}>Výchozí</button>
+          <button className={order === 'random' ? 'active' : ''} onClick={() => setOrder('random')}>Náhodné</button>
         </div>
       </div>
 

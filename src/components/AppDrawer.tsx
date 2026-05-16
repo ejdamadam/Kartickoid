@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { t } from '../i18n';
+import { APP_VERSION } from '../app/version';
 
 interface AppDrawerProps {
   open: boolean;
@@ -16,7 +17,6 @@ interface AppDrawerProps {
 
 export default function AppDrawer({ open, onClose, onHome, onImport, onExport, onStats, onHelp, onSettings, onAbout }: AppDrawerProps) {
   const items = [
-    { label: t.nav.home, action: onHome },
     { label: t.nav.decks, action: onHome },
     { label: t.common.import, action: onImport },
     { label: t.common.export, action: onExport },
@@ -74,6 +74,7 @@ export default function AppDrawer({ open, onClose, onHome, onImport, onExport, o
             </button>
           ))}
         </nav>
+        <p className="drawer-version">v{APP_VERSION}</p>
       </motion.aside>
     </div>
   );

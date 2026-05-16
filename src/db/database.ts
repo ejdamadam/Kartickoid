@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { AppMeta, Card, Deck, DeckSummary, EntityId, Media, ReviewLog } from '../types';
+import type { AppMeta, BackupHistoryEntry, Card, Deck, DeckSummary, EntityId, Media, ReviewLog } from '../types';
 import { DB_NAME, DB_VERSION } from './schema';
 import { createId } from '../utils/id';
 import { nowIso, startOfTodayIso } from '../utils/date';
@@ -10,6 +10,7 @@ export class FlashcardDatabase extends Dexie {
   media!: Table<Media, EntityId>;
   reviewLogs!: Table<ReviewLog, EntityId>;
   appMeta!: Table<AppMeta, string>;
+  backups!: Table<BackupHistoryEntry, EntityId>;
 
   constructor() {
     super(DB_NAME);
@@ -27,7 +28,8 @@ export class FlashcardDatabase extends Dexie {
       cards: 'id, deckId, dueAt, updatedAt, *tags',
       media: 'id, cardId',
       reviewLogs: 'id, cardId, deckId, reviewedAt',
-      appMeta: 'key'
+      appMeta: 'key',
+      backups: 'id, createdAt, reason'
     }).upgrade(async (transaction) => {
       await transaction.table('appMeta').put({
         key: 'schemaVersion',
