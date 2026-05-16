@@ -192,13 +192,12 @@ h2 {
 }
 
 .app-drawer .brand-mark {
-  display: grid;
+  display: block;
   width: 38px;
   height: 38px;
-  place-items: center;
   border-radius: 8px;
-  background: var(--primary-color);
-  color: var(--bg-color);
+  object-fit: cover;
+  box-shadow: 0 10px 20px rgba(var(--primary-rgb), 0.16);
 }
 
 .status-pills,
@@ -905,7 +904,8 @@ h2 {
 .limit-selector {
   width: 100%;
   max-width: 400px;
-  margin: 1rem 0;
+  margin: 1rem auto;
+  text-align: center;
 }
 
 .limit-selector .segmented {
@@ -1476,6 +1476,11 @@ h2 {
   justify-items: start;
   gap: 0.7rem;
   margin-top: 1rem;
+}
+
+.study-done.modern-empty {
+  justify-items: center;
+  text-align: center;
 }
 
 .import-grid {

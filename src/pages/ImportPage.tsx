@@ -10,7 +10,6 @@ import { nowIso } from '../utils/date';
 import { t } from '../i18n';
 
 interface ImportPageProps {
-  onBack: () => void;
   onChanged: () => void;
   onDeckCreated?: (deckId: string) => void;
 }
@@ -19,7 +18,7 @@ type ImportTab = 'json' | 'csv' | 'markdown' | 'anki';
 
 const emptyPreview: ImportPreview = { cards: [], skippedRows: 0, warnings: [] };
 
-export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportPageProps) {
+export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps) {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [targetDeckId, setTargetDeckId] = useState('');
   const [tab, setTab] = useState<ImportTab>('json');
@@ -209,8 +208,6 @@ export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportP
 
   return (
     <section className="page">
-      <button className="back-button" onClick={onBack}>← {t.common.back}</button>
-
       <div className="page-heading">
         <div>
           <p className="eyebrow">{t.common.import}</p>

@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { t } from '../i18n';
 import { APP_VERSION } from '../app/version';
 
+const appLogoUrl = `${import.meta.env.BASE_URL}icons/kartickoid_logo.png`;
+
 interface AppDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -17,7 +19,7 @@ interface AppDrawerProps {
 export default function AppDrawer({ open, onClose, onHome, onImport, onStats, onHelp, onSettings, onAbout }: AppDrawerProps) {
   const items = [
     { label: t.nav.decks, action: onHome },
-    { label: t.common.import, action: onImport },
+    { label: 'Import/export', action: onImport },
     { label: t.common.statistics, action: onStats },
     { label: 'Návod', action: onHelp },
     { label: t.common.settings, action: onSettings },
@@ -52,7 +54,7 @@ export default function AppDrawer({ open, onClose, onHome, onImport, onStats, on
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       >
         <header className="drawer-header" onClick={handleEasterEgg} style={{ cursor: 'pointer' }}>
-          <div className="brand-mark">{t.app.mark}</div>
+          <img className="brand-mark" src={appLogoUrl} alt="" aria-hidden="true" />
           <div>
             <strong>{t.app.name}</strong>
             <p>{t.app.localStudy}</p>

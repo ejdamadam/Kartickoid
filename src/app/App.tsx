@@ -140,18 +140,17 @@ export default function App() {
 
             {route.name === 'import' && (
               <ImportPage
-                onBack={() => setRoute({ name: 'home' })}
                 onChanged={refresh}
                 onDeckCreated={(deckId) => setRoute({ name: 'deck', deckId })}
               />
             )}
 
             {route.name === 'stats' && (
-              <StatsPage onBack={() => setRoute({ name: 'home' })} />
+              <StatsPage />
             )}
 
             {route.name === 'help' && (
-              <HelpPage onBack={() => setRoute({ name: 'home' })} />
+              <HelpPage />
             )}
           </motion.div>
         </AnimatePresence>

@@ -1,15 +1,8 @@
-import React from 'react';
 import { t } from '../i18n';
 
-interface HelpPageProps {
-  onBack: () => void;
-}
-
-export default function HelpPage({ onBack }: HelpPageProps) {
+export default function HelpPage() {
   return (
     <section className="page help-page">
-      <button className="back-button" onClick={onBack}>← {t.common.back}</button>
-      
       <div className="page-heading">
         <div>
           <p className="eyebrow">Dokumentace</p>

@@ -90,7 +90,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
     return () => {
       active = false;
     };
-  }, [deckIds, tags, source, sessionKey, limit, order]);
+  }, [deckIds, tags, source, sessionKey]);
 
   const dueCount = useMemo(() => {
     const now = new Date();
@@ -486,7 +486,7 @@ function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, o
       <p>{t.study.cardsDone}: {completed} · {t.study.inDeck}: {total} · {t.study.dueNow}: {dueCount}</p>
       
       <div className="limit-selector">
-        <p className="side-label">Karet v session</p>
+        <p className="side-label">Karet v průchodu</p>
         <div className="segmented">
           {[10, 20, 50, 0].map((val) => (
             <button 

@@ -4,11 +4,7 @@ import { getStatsOverview, type StatsOverview } from '../services/stats';
 import { formatDateTime } from '../utils/date';
 import RichTextDisplay from '../components/RichTextDisplay';
 
-interface StatsPageProps {
-  onBack: () => void;
-}
-
-export default function StatsPage({ onBack }: StatsPageProps) {
+export default function StatsPage() {
   const [stats, setStats] = useState<StatsOverview>();
   const [error, setError] = useState<string>();
   const [deckSort, setDeckSort] = useState<'last' | 'worst' | 'most' | 'hard'>('last');
@@ -30,7 +26,6 @@ export default function StatsPage({ onBack }: StatsPageProps) {
 
   return (
     <section className="page">
-      <button className="back-button" onClick={onBack}>← {t.common.back}</button>
       <div className="page-heading">
         <div>
           <p className="eyebrow">{t.common.statistics}</p>
