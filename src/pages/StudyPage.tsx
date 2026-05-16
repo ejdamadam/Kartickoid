@@ -55,6 +55,10 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   const [order, setOrder] = useState<'default' | 'random'>(initialOrder);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, []);
+
+  useEffect(() => {
     let active = true;
     setLoading(true);
     
@@ -154,10 +158,10 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
     <section className="study-page mobile-study">
       <div className="study-header-compact">
         <button className="text-button" onClick={onBack}>← Zpět</button>
-        <h1 style={{ fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
+        <h1>
             {deckNames.join(', ')}
         </h1>
-        <span className="pill pill-muted">{queue.length === 0 ? 0 : Math.min(index + 1, queue.length)} / {queue.length}</span>
+        <span className="pill pill-muted study-progress-counter">{queue.length === 0 ? 0 : Math.min(index + 1, queue.length)} / {queue.length}</span>
       </div>
 
       <div className="mode-tabs compact-tabs" role="tablist" aria-label={t.study.title}>

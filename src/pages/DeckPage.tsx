@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import BulkEditor from '../components/BulkEditor';
 import CardForm, { type CardFormValues } from '../components/CardForm';
 import CardMediaList from '../components/CardMediaList';
@@ -42,6 +42,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   const [studySource, setStudySource] = useState<DeckStudySource>('all');
   const [studyLimit, setStudyLimit] = useState(0);
   const [studyOrder, setStudyOrder] = useState<'default' | 'random'>('default');
+  const pendingScrollY = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     let active = true;
@@ -59,6 +60,11 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         setMedia(nextMedia.filter((item) => nextCards.some((card) => card.id === item.cardId)));
         setLogs(nextLogs);
         setLoading(false);
+        if (pendingScrollY.current !== undefined) {
+          const scrollY = pendingScrollY.current;
+          pendingScrollY.current = undefined;
+          requestAnimationFrame(() => window.scrollTo(0, scrollY));
+        }
       })
       .catch((err) => {
           if (active) {
@@ -176,15 +182,13 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   }
 
   async function deleteCard(card: Card) {
-    const scrollPos = window.scrollY;
+    pendingScrollY.current = window.scrollY;
     try {
       await deleteCardCascade(card.id);
       await db.decks.update(deckId, { updatedAt: nowIso() });
       onChanged();
-      requestAnimationFrame(() => {
-        window.scrollTo(0, scrollPos);
-      });
     } catch (err) {
+      pendingScrollY.current = undefined;
       setError(err instanceof Error ? err.message : t.common.error);
     }
   }
@@ -291,10 +295,12 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   }
 
   async function removeMedia(mediaId: string) {
+    pendingScrollY.current = window.scrollY;
     try {
       await removeMediaFromCard(mediaId);
       onChanged();
     } catch (err) {
+      pendingScrollY.current = undefined;
       setError(err instanceof Error ? err.message : t.common.error);
     }
   }
