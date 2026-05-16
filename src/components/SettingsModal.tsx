@@ -7,6 +7,7 @@ import {
   deleteBackupHistoryEntry,
   downloadBackup,
   downloadBackupHistoryEntry,
+  downloadBackupZip,
   formatImportSummary,
   getBackupHistory,
   importBackupFile,
@@ -167,6 +168,18 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     }
   }
 
+  async function handleDownloadZipBackup() {
+    setSettingsError(undefined);
+    setSettingsMessage(undefined);
+    try {
+      await downloadBackupZip();
+      setSettingsMessage('ZIP záloha byla vytvořena a uložena do historie. Média jsou uložená jako samostatné soubory.');
+      await loadBackupHistory();
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Export ZIP zálohy se nepodařil.');
+    }
+  }
+
   async function handleRestoreHistory(id: string) {
     const ok = window.confirm('Tento krok smaže aktuální lokální data a nahradí je vybranou historickou zálohou. Před obnovou se vytvoří bezpečnostní snapshot. Pokračovat?');
     if (!ok) return;
@@ -261,10 +274,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         {customBackground && <p className="muted">Aktivní pozadí: {customBackground.name}</p>}
         
         <h3>Záloha a import</h3>
-        <p className="muted">JSON záloha obsahuje sady, kartičky, audio data a metadata, historii učení, progress kartiček i nastavení aplikace včetně velikosti textu a vlastního pozadí. Audio je uložené jako base64, takže může být soubor výrazně větší.</p>
+        <p className="muted">Import přijímá JSON i ZIP zálohy automaticky. JSON je zpětně kompatibilní a ukládá média jako base64, ZIP obsahuje backup.json a média jako samostatné soubory.</p>
         <div className="button-row">
           <button className="primary-button" type="button" onClick={handleDownloadBackup}>Exportovat JSON</button>
           <button className="secondary-button" type="button" onClick={handleShareBackup}>Sdílet JSON</button>
+          <button className="secondary-button" type="button" onClick={handleDownloadZipBackup}>Exportovat ZIP</button>
         </div>
 
         <section className="backup-history-list">
@@ -278,7 +292,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             <div className="backup-history-row" key={entry.id}>
               <div>
                 <strong>{formatDateTime(entry.createdAt)}</strong>
-                <small>{backupReasonLabel(entry.reason)} · {formatBytes(entry.size)} · v{entry.appVersion}</small>
+                <small>{backupReasonLabel(entry.reason)} · {(entry.format ?? 'json').toUpperCase()} · {formatBytes(entry.size)} · v{entry.appVersion}</small>
               </div>
               <div className="button-row">
                 <button className="tiny-button" type="button" onClick={() => void downloadBackupHistoryEntry(entry.id)}>Stáhnout</button>
@@ -292,13 +306,13 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         <SettingsImportAction
           title="Soft import — sloučit bez duplicit"
           description="Zkontroluje existující data a přidá jen nové nebo novější změny."
-          buttonLabel="Vybrat JSON pro soft import"
+          buttonLabel="Vybrat JSON/ZIP pro soft import"
           onFile={(file) => handleJsonImport('soft', file)}
         />
         <SettingsImportAction
           title="Hard import — přidat vše z JSONu"
           description="Přidá celý obsah JSONu k aktuálním datům. Může vytvořit duplicity."
-          buttonLabel="Vybrat JSON pro hard import"
+          buttonLabel="Vybrat JSON/ZIP pro hard import"
           onFile={(file) => handleJsonImport('hard', file)}
         />
         <label className="checkbox-row">
@@ -312,7 +326,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         <SettingsImportAction
           title="Reset / Obnovit ze zálohy"
           description="Nahradí celý aktuální stav aplikace obsahem zálohy."
-          buttonLabel="Vybrat JSON pro obnovu"
+          buttonLabel="Vybrat JSON/ZIP pro obnovu"
           danger
           onFile={(file) => handleJsonImport('reset', file)}
         />
@@ -358,7 +372,7 @@ function SettingsImportAction({ title, description, buttonLabel, danger, onFile 
         {buttonLabel}
         <input
           type="file"
-          accept="application/json,.json"
+          accept="application/json,.json,.zip,application/zip,application/x-zip-compressed"
           onChange={(event) => {
             onFile(event.target.files?.[0]);
             event.currentTarget.value = '';

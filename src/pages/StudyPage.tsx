@@ -264,7 +264,8 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
   }
 
   function handleTap(event: any, info: any) {
-    if (event.target.closest('audio') || event.target.closest('button')) {
+    const interactiveTarget = event.target.closest('audio, button, .media-grid, .media-item, .audio-shell');
+    if (interactiveTarget) {
       return;
     }
     onFlip();

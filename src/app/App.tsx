@@ -72,7 +72,6 @@ export default function App() {
         onClose={() => setDrawerOpen(false)}
         onHome={() => setRoute({ name: 'home' })}
         onImport={() => setRoute({ name: 'import' })}
-        onExport={downloadBackup}
         onStats={() => setRoute({ name: 'stats' })}
         onHelp={() => setRoute({ name: 'help' })}
         onSettings={() => setModal('settings')}

@@ -3,6 +3,7 @@ import { db } from '../db/database';
 import type { AppMeta, BackupFile, BackupHistoryEntry, Card, Deck, EntityId, ExportMedia, Media, ReviewLog } from '../types';
 import { createId } from '../utils/id';
 import { nowIso } from '../utils/date';
+import JSZip from 'jszip';
 
 export type ImportMode = 'soft' | 'hard' | 'reset';
 
@@ -79,6 +80,7 @@ export async function exportDatabase(): Promise<BackupFile> {
     exportId: createId('export'),
     exportedAt,
     mediaIncludesBlobs: true,
+    mediaStorage: 'json-base64',
     decks,
     cards,
     media: exportedMedia,
@@ -90,6 +92,12 @@ export async function exportDatabase(): Promise<BackupFile> {
 export async function downloadBackup(): Promise<void> {
   const backup = await exportDatabase();
   const entry = await createBackupHistoryEntry(backup, 'manual');
+  await downloadBlobFile(entry.blob, entry.name);
+}
+
+export async function downloadBackupZip(): Promise<void> {
+  const { blob, name } = await createBackupZipBlob();
+  const entry = await createBackupHistoryBlobEntry(blob, name, 'manual', 'zip');
   await downloadBlobFile(entry.blob, entry.name);
 }
 
@@ -149,6 +157,7 @@ export async function downloadDeckBackup(deckId: EntityId, deckName: string): Pr
     exportId: createId('export'),
     exportedAt,
     mediaIncludesBlobs: true,
+    mediaStorage: 'json-base64',
     decks: [deck],
     cards,
     media: exportedMedia,
@@ -176,7 +185,7 @@ export async function deleteBackupHistoryEntry(id: EntityId): Promise<void> {
 export async function restoreBackupHistoryEntry(id: EntityId): Promise<ImportBackupSummary> {
   const entry = await db.backups.get(id);
   if (!entry) throw new Error('Záloha v historii nebyla nalezena.');
-  const parsed = readBackupText(await entry.blob.text());
+  const parsed = await readBackupBlob(entry.blob, entry.name);
   return resetImport(parsed, true);
 }
 
@@ -476,7 +485,56 @@ async function resetImport(parsed: ParsedBackup, createSafetySnapshot: boolean):
 }
 
 async function readBackupFile(file: File): Promise<ParsedBackup> {
-  return readBackupText(await file.text());
+  return readBackupBlob(file, file.name);
+}
+
+async function readBackupBlob(blob: Blob, filename: string): Promise<ParsedBackup> {
+  if (isZipFile(filename, blob.type)) {
+    return readBackupZip(blob);
+  }
+
+  return readBackupText(await blob.text());
+}
+
+async function readBackupZip(blob: Blob): Promise<ParsedBackup> {
+  let zip: JSZip;
+  try {
+    zip = await JSZip.loadAsync(blob);
+  } catch {
+    throw new Error('ZIP zálohu se nepodařilo otevřít.');
+  }
+
+  const backupEntry = zip.file('backup.json')
+    ?? Object.values(zip.files).find((entry) => !entry.dir && entry.name.toLowerCase().endsWith('.json'));
+  if (!backupEntry) {
+    throw new Error('ZIP záloha neobsahuje soubor backup.json.');
+  }
+
+  let backup: BackupFile;
+  try {
+    backup = JSON.parse(await backupEntry.async('string')) as BackupFile;
+  } catch {
+    throw new Error('Soubor backup.json v ZIP záloze není platný JSON.');
+  }
+
+  const media = await Promise.all((backup.media ?? []).map(async (item) => {
+    if (item.dataUrl) return item;
+    if (!item.filePath) return item;
+
+    const mediaEntry = zip.file(item.filePath);
+    if (!mediaEntry) {
+      throw new Error(`ZIP záloha neobsahuje médium ${item.filePath}.`);
+    }
+
+    const mediaBlob = await mediaEntry.async('blob');
+    return {
+      ...item,
+      dataUrl: await blobToDataUrl(mediaBlob),
+      size: item.size ?? mediaBlob.size
+    };
+  }));
+
+  return validateBackup({ ...backup, media });
 }
 
 function readBackupText(text: string): ParsedBackup {
@@ -572,6 +630,10 @@ function validateBackup(value: BackupFile): ParsedBackup {
 }
 
 function toMedia(item: ExportMedia, cardId: EntityId, deckId: EntityId, id: EntityId): Media {
+  if (!item.dataUrl) {
+    throw new Error('Záloha obsahuje médium bez dat.');
+  }
+
   return {
     id,
     cardId,
@@ -707,10 +769,21 @@ async function createBackupHistoryEntry(backup: BackupFile, reason: BackupHistor
   const createdAt = nowIso();
   const name = `kartickoid-zaloha-${createdAt.slice(0, 10)}-${createdAt.slice(11, 19).replace(/:/g, '-')}.json`;
   const blob = backupToBlob(backup);
+  return createBackupHistoryBlobEntry(blob, name, reason, 'json', createdAt);
+}
+
+async function createBackupHistoryBlobEntry(
+  blob: Blob,
+  name: string,
+  reason: BackupHistoryEntry['reason'],
+  format: NonNullable<BackupHistoryEntry['format']>,
+  createdAt = nowIso()
+): Promise<BackupHistoryEntry> {
   const entry: BackupHistoryEntry = {
     id: createId('backup'),
     name,
     reason,
+    format,
     blob,
     size: blob.size,
     appVersion: APP_VERSION,
@@ -721,6 +794,59 @@ async function createBackupHistoryEntry(backup: BackupFile, reason: BackupHistor
   await db.backups.put(entry);
   await trimBackupHistory();
   return entry;
+}
+
+async function createBackupZipBlob(): Promise<{ blob: Blob; name: string }> {
+  const backup = await exportDatabase();
+  const zip = new JSZip();
+
+  await Promise.all(backup.media.map(async (item) => {
+    if (!item.dataUrl) return;
+    const mediaBlob = dataUrlToBlob(item.dataUrl);
+    const filePath = `media/${mediaFileName(item)}`;
+    zip.file(filePath, mediaBlob);
+    item.filePath = filePath;
+    delete item.dataUrl;
+  }));
+
+  backup.mediaIncludesBlobs = false;
+  backup.mediaStorage = 'zip-files';
+  zip.file('backup.json', JSON.stringify(backup, null, 2));
+
+  const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/zip' });
+  const createdAt = nowIso();
+  return {
+    blob,
+    name: `kartickoid-zaloha-${createdAt.slice(0, 10)}-${createdAt.slice(11, 19).replace(/:/g, '-')}.zip`
+  };
+}
+
+function isZipFile(filename: string, mimeType: string): boolean {
+  const lowerName = filename.toLowerCase();
+  return lowerName.endsWith('.zip') || mimeType === 'application/zip' || mimeType === 'application/x-zip-compressed';
+}
+
+function mediaFileName(item: ExportMedia): string {
+  const safeName = (item.name || 'media')
+    .replace(/[/\\?%*:|"<>]/g, '-')
+    .replace(/\s+/g, '-')
+    .slice(0, 80);
+  const hasExtension = /\.[a-z0-9]{2,5}$/i.test(safeName);
+  const extension = hasExtension ? '' : extensionForMime(item.mimeType);
+  return `${item.id}-${safeName || 'media'}${extension}`;
+}
+
+function extensionForMime(mimeType: string): string {
+  if (mimeType.includes('mpeg')) return '.mp3';
+  if (mimeType.includes('wav')) return '.wav';
+  if (mimeType.includes('ogg')) return '.ogg';
+  if (mimeType.includes('webm')) return '.webm';
+  if (mimeType.includes('mp4') || mimeType.includes('aac')) return '.m4a';
+  if (mimeType.includes('png')) return '.png';
+  if (mimeType.includes('webp')) return '.webp';
+  if (mimeType.includes('gif')) return '.gif';
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return '.jpg';
+  return '.bin';
 }
 
 async function trimBackupHistory(): Promise<void> {

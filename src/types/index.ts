@@ -78,6 +78,7 @@ export interface BackupHistoryEntry {
   id: EntityId;
   name: string;
   reason: 'manual' | 'share' | 'reset-safety';
+  format?: 'json' | 'zip';
   blob: Blob;
   size: number;
   appVersion: string;
@@ -99,7 +100,8 @@ export interface ExportMedia {
   cardId: EntityId;
   deckId: EntityId;
   side: CardSide;
-  dataUrl: string;
+  dataUrl?: string;
+  filePath?: string;
   mimeType: string;
   name: string;
   size?: number;
@@ -114,6 +116,7 @@ export interface BackupFile {
   exportDate?: string;
   exportId?: string;
   mediaIncludesBlobs?: boolean;
+  mediaStorage?: 'json-base64' | 'zip-files';
   exportedAt: string;
   decks: Deck[];
   cards: Card[];

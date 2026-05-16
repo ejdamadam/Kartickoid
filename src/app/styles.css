@@ -478,6 +478,19 @@ h2 {
   padding: 1.15rem;
 }
 
+.deck-card,
+.study-card-preview {
+  content-visibility: auto;
+}
+
+.deck-card {
+  contain-intrinsic-size: 220px;
+}
+
+.study-card-preview {
+  contain-intrinsic-size: 360px;
+}
+
 .deck-open {
   display: grid;
   width: 100%;
@@ -1284,6 +1297,9 @@ h2 {
   display: grid;
   gap: 0.4rem;
   margin: 0;
+  padding: 0.35rem;
+  border-radius: 8px;
+  touch-action: manipulation;
 }
 
 .audio-shell {
@@ -1291,6 +1307,8 @@ h2 {
   display: grid;
   gap: 0.35rem;
   min-height: 48px;
+  padding: 0.25rem;
+  margin: -0.25rem;
 }
 
 .audio-player {

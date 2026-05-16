@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import JSZip from 'jszip';
 import { createCardInput, createDeckInput, db, addMediaToCard } from '../db/database';
-import { downloadBackup, formatImportSummary, importBackupFile, shareBackup, type ImportMode } from '../services/exportImport';
+import { downloadBackup, downloadBackupZip, formatImportSummary, importBackupFile, shareBackup, type ImportMode } from '../services/exportImport';
 import { previewCsvCards, parseCsvCards } from '../services/importers/csvImporter';
 import { previewMarkdownCards } from '../services/importers/markdownImporter';
 import { importAnkiXml } from '../services/importers/ankiImporter';
@@ -90,6 +90,17 @@ export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportP
       setMessage(result === 'shared'
         ? 'Sdílení JSON zálohy bylo otevřeno.'
         : 'Sdílení není v tomto prohlížeči dostupné, záloha byla stažena jako soubor.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  async function handleDownloadZipBackup() {
+    setError(undefined);
+    setMessage(undefined);
+    try {
+      await downloadBackupZip();
+      setMessage('ZIP záloha byla vytvořena. Obsahuje backup.json a média jako samostatné soubory.');
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     }
@@ -230,23 +241,24 @@ export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportP
       {tab === 'json' && (
         <section className="panel stack">
           <h2>Záloha a import JSON</h2>
-          <p>JSON záloha obsahuje sady, kartičky, média včetně audio dat, metadata médií, historii učení, progress kartiček a nastavení aplikace.</p>
+          <p>Import přijímá starší JSON zálohy i nové ZIP zálohy automaticky. JSON obsahuje média jako base64, ZIP ukládá backup.json a média jako samostatné soubory.</p>
           <div className="button-row">
             <button className="primary-button" type="button" onClick={downloadBackup}>Exportovat JSON</button>
             <button className="secondary-button" type="button" onClick={handleShareBackup}>Sdílet JSON</button>
+            <button className="secondary-button" type="button" onClick={handleDownloadZipBackup}>Exportovat ZIP</button>
           </div>
 
           <JsonImportAction
             title="Soft import — sloučit bez duplicit"
             description="Zkontroluje existující data a přidá jen nové nebo novější změny."
-            buttonLabel="Vybrat JSON pro soft import"
+            buttonLabel="Vybrat JSON/ZIP pro soft import"
             onFile={(file) => handleJson('soft', file)}
           />
 
           <JsonImportAction
             title="Hard import — přidat vše z JSONu"
             description="Přidá celý obsah JSONu k aktuálním datům. Může vytvořit duplicity."
-            buttonLabel="Vybrat JSON pro hard import"
+            buttonLabel="Vybrat JSON/ZIP pro hard import"
             onFile={(file) => handleJson('hard', file)}
           />
           <label className="checkbox-row">
@@ -261,7 +273,7 @@ export default function ImportPage({ onBack, onChanged, onDeckCreated }: ImportP
           <JsonImportAction
             title="Reset / Obnovit ze zálohy"
             description="Nahradí celý aktuální stav aplikace obsahem zálohy."
-            buttonLabel="Vybrat JSON pro obnovu"
+            buttonLabel="Vybrat JSON/ZIP pro obnovu"
             danger
             onFile={(file) => handleJson('reset', file)}
           />
@@ -348,7 +360,7 @@ function JsonImportAction({ title, description, buttonLabel, danger, onFile }: {
         {buttonLabel}
         <input
           type="file"
-          accept="application/json,.json"
+          accept="application/json,.json,.zip,application/zip,application/x-zip-compressed"
           onChange={(event) => {
             onFile(event.target.files?.[0]);
             event.currentTarget.value = '';

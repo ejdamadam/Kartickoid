@@ -8,18 +8,16 @@ interface AppDrawerProps {
   onClose: () => void;
   onHome: () => void;
   onImport: () => void;
-  onExport: () => void;
   onStats: () => void;
   onHelp: () => void;
   onSettings: () => void;
   onAbout: () => void;
 }
 
-export default function AppDrawer({ open, onClose, onHome, onImport, onExport, onStats, onHelp, onSettings, onAbout }: AppDrawerProps) {
+export default function AppDrawer({ open, onClose, onHome, onImport, onStats, onHelp, onSettings, onAbout }: AppDrawerProps) {
   const items = [
     { label: t.nav.decks, action: onHome },
     { label: t.common.import, action: onImport },
-    { label: t.common.export, action: onExport },
     { label: t.common.statistics, action: onStats },
     { label: 'Návod', action: onHelp },
     { label: t.common.settings, action: onSettings },
