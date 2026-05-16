@@ -17,15 +17,19 @@ export async function processImageFile(file: File, cardId: EntityId, deckId: Ent
 }
 
 export async function processImageForCard(file: File, side: CardSide): Promise<PendingCardMedia> {
-  if (!file.type.startsWith('image/')) {
+  return processImageBlobForCard(file, side, file.name);
+}
+
+export async function processImageBlobForCard(source: Blob, side: CardSide, name = 'image'): Promise<PendingCardMedia> {
+  if (!source.type.startsWith('image/')) {
     throw new Error('Soubor musí být obrázek.');
   }
 
-  if (file.size > MAX_IMAGE_BYTES) {
+  if (source.size > MAX_IMAGE_BYTES) {
     throw new Error('Obrázek je příliš velký. Zvolte prosím soubor do 18 MB.');
   }
 
-  const image = await loadRasterSource(file);
+  const image = await loadRasterSource(source);
   const scale = Math.min(1, MAX_WIDTH / image.width);
   const width = Math.round(image.width * scale);
   const height = Math.round(image.height * scale);
@@ -52,7 +56,8 @@ export async function processImageForCard(file: File, side: CardSide): Promise<P
     type: 'image',
     blob,
     mimeType: blob.type || preferredType,
-    name: file.name,
+    name,
+    size: blob.size,
     createdAt: nowIso()
   };
 }
@@ -71,7 +76,7 @@ function supportsWebP(): boolean {
   return canvas.toDataURL('image/webp').startsWith('data:image/webp');
 }
 
-async function loadRasterSource(file: File): Promise<{
+async function loadRasterSource(file: Blob): Promise<{
   source: CanvasImageSource;
   width: number;
   height: number;

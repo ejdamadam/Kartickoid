@@ -1,4 +1,5 @@
 import type { Card, PendingCardMedia } from '../../types';
+import { processImportedMedia } from '../mediaProcessing';
 import { createId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 
@@ -54,39 +55,26 @@ export async function importAnkiXml(xmlText: string, blobs: Map<string, Blob>): 
         const hash = audioEl.getAttribute('id') || '';
         const blob = blobs.get(hash);
         if (blob) {
-            cardMedia.push({
-                id: createId('media'),
-                side: 'back',
-                blob,
-                mimeType: audioEl.getAttribute('type') || 'audio/mpeg',
-                type: 'audio',
-                name: 'Audio',
-                createdAt: nowIso()
-            });
+            cardMedia.push(await processImportedMedia(blob, 'back', {
+              mimeType: audioEl.getAttribute('type') || 'audio/mpeg',
+              name: 'Audio'
+            }));
         }
     } else if (frontEl || backEl) {
-        const processContent = (content: string, side: 'front' | 'back') => {
+        const processContent = async (content: string, side: 'front' | 'back') => {
           const blobRegex = /\{\{blob ([a-f0-9]+)\}\}/g;
           let match;
           while ((match = blobRegex.exec(content)) !== null) {
             const hash = match[1];
             const blob = blobs.get(hash);
             if (blob) {
-              cardMedia.push({
-                id: createId('media'),
-                side,
-                blob,
-                mimeType: blob.type || 'image/jpeg',
-                type: blob.type.startsWith('audio/') ? 'audio' : 'image',
-                name: hash,
-                createdAt: nowIso()
-              });
+              cardMedia.push(await processImportedMedia(blob, side, { name: hash }));
             }
           }
           return sanitizeHtml(content.replace(blobRegex, ''));
         };
-        frontText = processContent(backEl?.innerHTML || '', 'front');
-        backText = processContent(frontEl?.innerHTML || '', 'back');
+        frontText = await processContent(backEl?.innerHTML || '', 'front');
+        backText = await processContent(frontEl?.innerHTML || '', 'back');
     }
 
     const newCard: Card = {
