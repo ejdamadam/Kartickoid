@@ -51,6 +51,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   const [mistakeIds, setMistakeIds] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
+  const [contentReady, setContentReady] = useState(false);
 
   const [limit, setLimit] = useState<number>(initialLimit);
   const [order, setOrder] = useState<'default' | 'random'>(initialOrder);
@@ -62,21 +63,21 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setContentReady(false);
     
     const filter: StudyFilter = { deckIds, tags };
     
     Promise.all([
       db.decks.where('id').anyOf(deckIds).toArray(),
       loadStudyCards(filter, source, { limit, order }),
-      db.cards.where('deckId').anyOf(deckIds).toArray(),
-      db.media.toArray()
+      db.cards.where('deckId').anyOf(deckIds).toArray()
     ])
-      .then(([decks, sessionCards, deckCards, allMedia]) => {
+      .then(async ([decks, sessionCards, deckCards]) => {
+        const deckMedia = await loadMediaForCards(deckCards.map((card) => card.id));
         if (!active) return;
         setDeckNames(decks.map(d => d.name));
-        const deckCardIds = new Set(deckCards.map((card) => card.id));
         setAllCards(deckCards);
-        setMedia(allMedia.filter((item) => deckCardIds.has(item.cardId)));
+        setMedia(deckMedia);
 
         setQueue(sessionCards);
         
@@ -97,6 +98,13 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
       active = false;
     };
   }, [deckIds, tags, source, sessionKey]);
+
+  useEffect(() => {
+    if (loading) return;
+    setContentReady(false);
+    const timeout = window.setTimeout(() => setContentReady(true), 160);
+    return () => window.clearTimeout(timeout);
+  }, [loading, sessionKey, source]);
 
   const dueCount = useMemo(() => {
     const now = new Date();
@@ -211,7 +219,16 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
       {error && <p className="error-box">{error}</p>}
 
       <AnimatePresence mode="wait">
-        {!currentCard ? (
+        {!contentReady ? (
+          <motion.div
+            key="preparing"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+          >
+            <article className="mode-panel"><p className="muted">Připravuji kartičku...</p></article>
+          </motion.div>
+        ) : !currentCard ? (
           <motion.div
             key="empty"
             initial={{ opacity: 0, scale: 0.94 }}
@@ -674,4 +691,9 @@ function vibrate(duration: number) {
   if ('vibrate' in navigator) {
     navigator.vibrate(duration);
   }
+}
+
+async function loadMediaForCards(cardIds: string[]): Promise<Media[]> {
+  if (cardIds.length === 0) return [];
+  return db.media.where('cardId').anyOf(cardIds).toArray();
 }

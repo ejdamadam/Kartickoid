@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../components/Modal';
 import DeckForm from '../components/DeckForm';
 import { createDeckInput, db, deleteDeckCascade } from '../db/database';
-import type { Deck, DeckSummary } from '../types';
-import { formatDateTime, nowIso } from '../utils/date';
+import type { Card, Deck, DeckSummary, ReviewLog } from '../types';
+import { formatDateTime, nowIso, startOfTodayIso } from '../utils/date';
 import { createBackupZipFile } from '../services/exportImport';
 import { getOneDriveSettings, uploadOneDriveBackup, type OneDriveSettings } from '../services/oneDriveSync';
 import { t } from '../i18n';
@@ -15,9 +15,14 @@ interface HomePageProps {
   onCustomStudy: (deckIds: string[], tags: string[]) => void;
 }
 
+let cachedHomeState: { summaries: DeckSummary[]; allCards: Card[] } = {
+  summaries: [],
+  allCards: []
+};
+
 export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomStudy }: HomePageProps) {
-  const [summaries, setSummaries] = useState<DeckSummary[]>([]);
-  const [allCards, setAllCards] = useState<any[]>([]);
+  const [summaries, setSummaries] = useState<DeckSummary[]>(() => cachedHomeState.summaries);
+  const [allCards, setAllCards] = useState<Card[]>(() => cachedHomeState.allCards);
   const [editingDeck, setEditingDeck] = useState<Deck | 'new'>();
   const [customStudyOpen, setCustomStudyOpen] = useState(false);
   const [selectedDecks, setSelectedDecks] = useState<string[]>([]);
@@ -36,22 +41,10 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
       db.reviewLogs.toArray()
     ]).then(([decks, cards, logs]) => {
       if (!active) return;
+      const nextSummaries = buildDeckSummaries(decks, cards, logs);
+      cachedHomeState = { summaries: nextSummaries, allCards: cards };
       setAllCards(cards);
-      const nextSummaries: DeckSummary[] = decks.map(deck => {
-        const deckCards = cards.filter(c => c.deckId === deck.id);
-        const deckLogs = logs.filter(l => l.deckId === deck.id);
-        const now = new Date();
-        const sortedLogs = [...deckLogs].sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt));
-        return {
-          deck,
-          cardCount: deckCards.length,
-          dueCount: deckCards.filter(c => new Date(c.dueAt) <= now).length,
-          newCount: deckCards.filter(c => c.repetitions === 0 && c.lapses === 0).length,
-          reviewedToday: deckLogs.filter(l => l.reviewedAt >= now.toISOString().slice(0, 10)).length,
-          lastReviewedAt: sortedLogs[0]?.reviewedAt ?? deck.updatedAt
-        };
-      });
-      setSummaries(nextSummaries.sort((a, b) => (b.lastReviewedAt ?? '').localeCompare(a.lastReviewedAt ?? '')));
+      setSummaries(nextSummaries);
       if (pendingScrollY.current !== undefined) {
         const scrollY = pendingScrollY.current;
         pendingScrollY.current = undefined;
@@ -229,12 +222,12 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
 
       {customStudyOpen && (
         <Modal title="Procvičit více sad" onClose={() => setCustomStudyOpen(false)}>
-          <div className="stack">
+          <div className="stack custom-study-modal">
             <p><strong>1. Vyberte sady:</strong></p>
-            <div className="deck-selector-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', maxHeight: '200px', overflow: 'auto', padding: '5px' }}>
+            <div className="deck-selector-list">
               {summaries.map(s => (
-                <label key={s.deck.id} className={`chip deck-select-chip ${selectedDecks.includes(s.deck.id) ? 'selected' : ''}`} style={{ cursor: 'pointer', textAlign: 'center' }}>
-                  <input type="checkbox" checked={selectedDecks.includes(s.deck.id)} onChange={() => toggleDeckSelection(s.deck.id)} style={{ display: 'none' }} />
+                <label key={s.deck.id} className={`chip deck-select-chip ${selectedDecks.includes(s.deck.id) ? 'selected' : ''}`}>
+                  <input type="checkbox" checked={selectedDecks.includes(s.deck.id)} onChange={() => toggleDeckSelection(s.deck.id)} />
                   {s.deck.name}
                 </label>
               ))}
@@ -242,8 +235,8 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
             
             {availableTags.length > 0 && (
                 <>
-                    <p style={{ marginTop: '1rem' }}><strong>2. Filtrovat podle tagů (volitelné):</strong></p>
-                    <div className="tag-selector-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '150px', overflow: 'auto', padding: '5px' }}>
+                    <p className="custom-study-step"><strong>2. Filtrovat podle tagů (volitelné):</strong></p>
+                    <div className="tag-selector-list">
                         {availableTags.map(tag => (
                             <button 
                                 key={tag} 
@@ -257,9 +250,9 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
                 </>
             )}
 
-            <button 
-                className="primary-button wide" 
-                style={{ marginTop: '1.5rem' }}
+            <div className="custom-study-actions">
+              <button
+                className="primary-button full-width"
                 disabled={selectedDecks.length === 0}
                 onClick={() => {
                     onCustomStudy(selectedDecks, selectedTags);
@@ -268,6 +261,7 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
             >
               Spustit procvičování
             </button>
+            </div>
           </div>
         </Modal>
       )}
@@ -283,4 +277,41 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
       )}
     </section>
   );
+}
+
+function buildDeckSummaries(decks: Deck[], cards: Card[], logs: ReviewLog[]): DeckSummary[] {
+  const now = new Date();
+  const today = startOfTodayIso();
+  const summariesByDeckId = new Map<string, DeckSummary>();
+
+  decks.forEach((deck) => {
+    summariesByDeckId.set(deck.id, {
+      deck,
+      cardCount: 0,
+      dueCount: 0,
+      newCount: 0,
+      reviewedToday: 0,
+      lastReviewedAt: deck.updatedAt
+    });
+  });
+
+  cards.forEach((card) => {
+    const summary = summariesByDeckId.get(card.deckId);
+    if (!summary) return;
+    summary.cardCount += 1;
+    if (new Date(card.dueAt) <= now) summary.dueCount += 1;
+    if (card.repetitions === 0 && card.lapses === 0) summary.newCount += 1;
+  });
+
+  logs.forEach((log) => {
+    const summary = summariesByDeckId.get(log.deckId);
+    if (!summary) return;
+    if (log.reviewedAt >= today) summary.reviewedToday += 1;
+    if (!summary.lastReviewedAt || log.reviewedAt > summary.lastReviewedAt) {
+      summary.lastReviewedAt = log.reviewedAt;
+    }
+  });
+
+  return Array.from(summariesByDeckId.values())
+    .sort((a, b) => (b.lastReviewedAt ?? '').localeCompare(a.lastReviewedAt ?? ''));
 }

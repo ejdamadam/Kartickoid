@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { t } from '../i18n';
 
 interface ModalProps {
@@ -8,7 +9,7 @@ interface ModalProps {
 }
 
 export default function Modal({ title, children, onClose }: ModalProps) {
-  return (
+  return createPortal(
     <div className="modal-backdrop" role="presentation">
       <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="modal-header">
@@ -17,6 +18,7 @@ export default function Modal({ title, children, onClose }: ModalProps) {
         </div>
         {children}
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }

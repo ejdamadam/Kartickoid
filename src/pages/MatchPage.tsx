@@ -43,11 +43,11 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
     setLoading(true);
     Promise.all([
       db.decks.get(deckId),
-      db.cards.where('deckId').equals(deckId).toArray(),
-      db.media.toArray()
-    ]).then(([nextDeck, nextCards, nextMedia]) => {
+      db.cards.where('deckId').equals(deckId).toArray()
+    ]).then(async ([nextDeck, nextCards]) => {
+      const nextMedia = await loadMediaForCards(nextCards.map((card) => card.id));
       if (!active) return;
-      const imageMedia = nextMedia.filter((item) => item.deckId === deckId && item.type === 'image');
+      const imageMedia = nextMedia.filter((item) => item.type === 'image');
       setDeck(nextDeck);
       setMedia(imageMedia);
       setCards(shuffle(nextCards.filter((card) => hasMatchContent(card, 'front', imageMedia) && hasMatchContent(card, 'back', imageMedia))).slice(0, 6));
@@ -235,4 +235,9 @@ function hasDisplayText(html: string): boolean {
     .replace(/&nbsp;|&#160;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim().length > 0;
+}
+
+async function loadMediaForCards(cardIds: string[]): Promise<Media[]> {
+  if (cardIds.length === 0) return [];
+  return db.media.where('cardId').anyOf(cardIds).toArray();
 }

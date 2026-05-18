@@ -45,6 +45,8 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
   const [error, setError] = useState<string>();
   const [mediaStatus, setMediaStatus] = useState<string>();
   const [loading, setLoading] = useState(true);
+  const [listReady, setListReady] = useState(false);
+  const [visibleCardCount, setVisibleCardCount] = useState(24);
   const [view, setView] = useState<'list' | 'stats'>('list');
   const [deckStats, setDeckStats] = useState<DeckStats>();
   const [studySource, setStudySource] = useState<DeckStudySource>('all');
@@ -55,17 +57,18 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setListReady(false);
     Promise.all([
       db.decks.get(deckId),
       db.cards.where('deckId').equals(deckId).toArray(),
-      db.media.toArray(),
       db.reviewLogs.where('deckId').equals(deckId).toArray()
     ])
-      .then(([nextDeck, nextCards, nextMedia, nextLogs]) => {
+      .then(async ([nextDeck, nextCards, nextLogs]) => {
+        const nextMedia = await loadMediaForCards(nextCards.map((card) => card.id));
         if (!active) return;
         setDeck(nextDeck);
         setCards(nextCards.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
-        setMedia(nextMedia.filter((item) => nextCards.some((card) => card.id === item.cardId)));
+        setMedia(nextMedia);
         setLogs(nextLogs);
         setLoading(false);
         if (pendingScrollY.current !== undefined) {
@@ -85,6 +88,13 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
       active = false;
     };
   }, [deckId, refreshKey]);
+
+  useEffect(() => {
+    if (loading) return;
+    setListReady(false);
+    const timeout = window.setTimeout(() => setListReady(true), 180);
+    return () => window.clearTimeout(timeout);
+  }, [loading, deckId, refreshKey]);
 
   useEffect(() => {
     if (view === 'stats') {
@@ -133,6 +143,28 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
       return matchesText && matchesTag && matchesStar;
     });
   }, [cards, query, tagFilter, starFilter]);
+
+  const visibleFilteredCards = useMemo(
+    () => filteredCards.slice(0, visibleCardCount),
+    [filteredCards, visibleCardCount]
+  );
+
+  const mediaByCardId = useMemo(() => {
+    const nextMap = new Map<string, Media[]>();
+    media.forEach((item) => {
+      const cardMedia = nextMap.get(item.cardId);
+      if (cardMedia) {
+        cardMedia.push(item);
+      } else {
+        nextMap.set(item.cardId, [item]);
+      }
+    });
+    return nextMap;
+  }, [media]);
+
+  useEffect(() => {
+    setVisibleCardCount(24);
+  }, [deckId, refreshKey, query, tagFilter, starFilter]);
 
   async function flipSide(card: Card) {
     pendingScrollY.current = window.scrollY;
@@ -550,9 +582,14 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
             </div>
           </div>
 
-          <div className="card-list">
-            {filteredCards.map((card) => {
-              const cardMedia = media.filter((item) => item.cardId === card.id);
+          {!listReady ? (
+            <div className="panel stack">
+              <p className="muted">Připravuji náhledy kartiček...</p>
+            </div>
+          ) : (
+            <div className="card-list">
+              {visibleFilteredCards.map((card) => {
+                const cardMedia = mediaByCardId.get(card.id) ?? [];
               return (
                 <article className="study-card-preview" key={card.id}>
                   <div className="card-preview-header">
@@ -593,7 +630,17 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
                 </article>
               );
             })}
-          </div>
+              {visibleCardCount < filteredCards.length && (
+                <button
+                  className="secondary-button full-width"
+                  type="button"
+                  onClick={() => setVisibleCardCount((count) => count + 24)}
+                >
+                  Zobrazit další kartičky ({Math.min(24, filteredCards.length - visibleCardCount)})
+                </button>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <div className="deck-stats-view stack">
@@ -640,7 +687,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
         </div>
       )}
 
-      {filteredCards.length === 0 && view === 'list' && (
+      {listReady && filteredCards.length === 0 && view === 'list' && (
         <div className="empty-state">
           <h2>{t.deck.noCardsTitle}</h2>
           <p>{t.deck.noCardsBody}</p>
@@ -651,7 +698,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
         <Modal title={editingCard === 'new' ? t.cardForm.newTitle : t.cardForm.editTitle} onClose={() => setEditingCard(undefined)}>
           <CardForm
             card={editingCard === 'new' ? undefined : editingCard}
-            existingMediaCount={editingCard === 'new' ? 0 : media.filter((item) => item.cardId === editingCard.id).length}
+            existingMediaCount={editingCard === 'new' ? 0 : (mediaByCardId.get(editingCard.id)?.length ?? 0)}
             tagSuggestions={allTags}
             onSubmit={saveCard}
             onCancel={() => setEditingCard(undefined)}
@@ -688,6 +735,11 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
       )}
     </section>
   );
+}
+
+async function loadMediaForCards(cardIds: string[]): Promise<Media[]> {
+  if (cardIds.length === 0) return [];
+  return db.media.where('cardId').anyOf(cardIds).toArray();
 }
 
 const studySourceOptions: Array<{ value: DeckStudySource; label: string }> = [

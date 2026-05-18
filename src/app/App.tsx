@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef, type TouchEvent } from 'react';
+import { startTransition, useCallback, useState, useEffect, useRef, type TouchEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import HomePage from '../pages/HomePage';
 import DeckPage from '../pages/DeckPage';
@@ -32,8 +32,26 @@ type Route =
   | { name: 'stats' }
   | { name: 'help' };
 
+type RouteDirection = 1 | -1;
+
+const routeVariants = {
+  enter: (direction: RouteDirection) => ({
+    opacity: 0,
+    x: direction === 1 ? 18 : -18
+  }),
+  center: {
+    opacity: 1,
+    x: 0
+  },
+  exit: (direction: RouteDirection) => ({
+    opacity: 0,
+    x: direction === 1 ? -12 : 12
+  })
+};
+
 export default function App() {
   const [routeStack, setRouteStack] = useState<Route[]>([{ name: 'home' }]);
+  const [routeDirection, setRouteDirection] = useState<RouteDirection>(1);
   const route = routeStack.at(-1) ?? { name: 'home' };
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -79,14 +97,20 @@ export default function App() {
 
   const refresh = useCallback(() => setRefreshKey((prev) => prev + 1), []);
   const navigate = useCallback((nextRoute: Route) => {
-    setRouteStack((stack) => {
-      const current = stack.at(-1);
-      if (current && routeKey(current) === routeKey(nextRoute)) return stack;
-      return [...stack, nextRoute];
+    setRouteDirection(1);
+    startTransition(() => {
+      setRouteStack((stack) => {
+        const current = stack.at(-1);
+        if (current && routeKey(current) === routeKey(nextRoute)) return stack;
+        return [...stack, nextRoute];
+      });
     });
   }, []);
   const goBack = useCallback(() => {
-    setRouteStack((stack) => stack.length > 1 ? stack.slice(0, -1) : stack);
+    setRouteDirection(-1);
+    startTransition(() => {
+      setRouteStack((stack) => stack.length > 1 ? stack.slice(0, -1) : stack);
+    });
   }, []);
   const canGoBack = routeStack.length > 1;
   const showBackButton = route.name !== 'home' && canGoBack;
@@ -138,13 +162,15 @@ export default function App() {
           </header>
         )}
 
-        <AnimatePresence mode="wait">
+        <AnimatePresence initial={false} mode="popLayout">
           <motion.div
             key={routeKey(route)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.14, ease: 'easeOut' }}
+            custom={routeDirection}
+            variants={routeVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             className="route-container"
           >
             {route.name === 'home' && (
