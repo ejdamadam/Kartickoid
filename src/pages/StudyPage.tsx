@@ -371,7 +371,7 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
         <motion.div className="swipe-indicator hard" style={{ opacity: hardOpacity }}>{t.study.hard}</motion.div>
 
         <motion.div
-          className="swipe-card"
+          className={`swipe-card ${revealed ? 'is-revealed' : ''}`}
           animate={{ rotateY: revealed ? 180 : 0 }}
           transition={{ duration: 0.46, ease: [0.22, 1, 0.36, 1] }}
         >
@@ -627,37 +627,10 @@ function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, o
       <h2>{dueCount === 0 ? t.study.allDoneTitle : t.study.sessionDoneTitle}</h2>
       <p>{t.study.cardsDone}: {completed} · {t.study.inDeck}: {total} · {t.study.dueNow}: {dueCount}</p>
       
-      <div className="limit-selector">
-        <p className="side-label">Karet v průchodu</p>
-        <div className="segmented">
-          {[10, 20, 50, 0].map((val) => (
-            <button 
-              key={val} 
-              className={limit === val ? 'active' : ''} 
-              onClick={() => setLimit(val)}
-            >
-              {val === 0 ? 'Vše' : val}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="limit-selector">
-        <p className="side-label">Pořadí</p>
-        <div className="segmented">
-          <button className={order === 'default' ? 'active' : ''} onClick={() => setOrder('default')}>Výchozí</button>
-          <button className={order === 'random' ? 'active' : ''} onClick={() => setOrder('random')}>Náhodné</button>
-        </div>
-      </div>
-
       <div className="session-actions">
-        <button className="primary-button" onClick={onRepeatSame}>Zopakovat stejné kartičky</button>
-        <p className="muted session-action-note">Znovu spustí právě dokončený výběr. Nový průchod níže znovu načte kartičky podle aktuálních voleb.</p>
-        <button className="secondary-button" onClick={() => onStart('all')}>Nový průchod ze všech kartiček</button>
-        <button className="secondary-button" onClick={() => onStart('lapsed')}>{sourceLabels.lapsed}</button>
-        <button className="secondary-button" onClick={() => onStart('random')}>{sourceLabels.random}</button>
+        <button className="primary-button" onClick={onRepeatSame}>Procvičit znovu</button>
+        <p className="muted session-action-note">Spustí znovu právě dokončené kartičky, bez dalšího výběru průchodu.</p>
         <button className="secondary-button" onClick={onRetryMistakes} disabled={mistakes === 0}>{sourceLabels.mistakes} ({mistakes})</button>
-        <button className="secondary-button" onClick={() => onStart('due')}>Nový dnešní průchod</button>
         <button className="secondary-button" onClick={onBack}>{t.common.back}</button>
       </div>
     </div>

@@ -473,8 +473,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
               {t.common.search}
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.deck.searchPlaceholder} />
             </label>
-            <div className="star-filter-control">
-              <span className="side-label">Hvězdičky</span>
+            <div className="tag-filter-panel" aria-label="Filtr tagů">
               <button
                 className={`star-filter-button star-filter-${starFilter}`}
                 type="button"
@@ -484,8 +483,6 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
               >
                 <span aria-hidden="true">{starFilterIcon[starFilter]}</span>
               </button>
-            </div>
-            <div className="tag-filter-panel" aria-label="Filtr tagů">
               {allTags.length === 0 ? (
                 <span className="muted">{t.deck.tagsEmpty}</span>
               ) : allTags.map((tag) => (

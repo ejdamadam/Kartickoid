@@ -55,7 +55,7 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
           <p>V detailu balíčku vidíte přední a zadní stranu každé kartičky odděleně. Delší texty zůstávají čitelné, karty můžete upravit, smazat, prohodit strany nebo doplnit média.</p>
           <ul>
             <li><strong>Hvězdička:</strong> označuje důležité, problematické nebo zkouškově klíčové kartičky. Zapnete ji v přehledu i přímo při procvičování.</li>
-            <li><strong>Filtr hvězdiček:</strong> v přehledu je malé hvězdičkové tlačítko. Prázdná hvězdička znamená všechny kartičky, zlatá pouze označené a škrtnutá kartičky bez hvězdičky. Klepnutím se režimy cyklicky střídají.</li>
+            <li><strong>Filtr hvězdiček:</strong> v řádku s tagy je malé hvězdičkové tlačítko. Prázdná hvězdička znamená všechny kartičky, zlatá pouze označené a škrtnutá kartičky bez hvězdičky. Klepnutím se režimy cyklicky střídají.</li>
             <li><strong>Hledání:</strong> prohledává text na obou stranách a tagy.</li>
             <li><strong>Tagy:</strong> klikáním na tagy rychle zúžíte balíček na konkrétní téma.</li>
           </ul>
@@ -73,7 +73,7 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
             <li><strong>Hvězdička při učení:</strong> hvězdičkou si kartu označíte bez opuštění průchodu.</li>
           </ul>
           <p>Delší kartičky se na telefonu čtou scrollováním uvnitř kartičky. Tělo karty zůstává ve velikosti, která se vejde na displej, a text začíná odshora na přední i zadní straně.</p>
-          <p>Po dokončení průchodu můžete zvolit <strong>Zopakovat stejné kartičky</strong>, což spustí právě dokončený výběr znovu, nebo <strong>Nový průchod</strong> podle aktuálních voleb, který znovu načte kartičky ze zdroje.</p>
+          <p>Po dokončení průchodu použijte <strong>Procvičit znovu</strong>, pokud chcete bez přemýšlení zopakovat právě dokončené kartičky. Pro jiný typ průchodu se vraťte do balíčku a spusťte procvičování znovu z požadovaného zdroje.</p>
           <p className="muted">Tip: Snadné používejte střídmě. Pokud jste dlouho přemýšleli, je přesnější Dobré nebo Těžké.</p>
         </section>
 
