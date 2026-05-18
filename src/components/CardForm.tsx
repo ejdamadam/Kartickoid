@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent, useEffect } from 'react';
 import type { Card, CardSide, PendingCardMedia } from '../types';
 import { db } from '../db/database';
-import { AUDIO_FILE_ACCEPT, processMediaForCard } from '../services/mediaProcessing';
+import { AUDIO_FILE_ACCEPT, processMediaForCard, processRecordedAudioForCard } from '../services/mediaProcessing';
 import { t } from '../i18n';
 import ObjectImage from './ObjectImage';
 import TagInput from './TagInput';
@@ -65,7 +65,7 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
     }
   }
 
-  async function addFiles(files: FileList | File[], side: CardSide) {
+  async function addFiles(files: FileList | File[], side: CardSide, options: { recordedAudio?: boolean } = {}) {
     const selected = Array.from(files);
     if (selected.length === 0) return;
     setProcessing(true);
@@ -73,7 +73,9 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
     try {
       const processed: PendingCardMedia[] = [];
       for (const file of selected) {
-        processed.push(await processMediaForCard(file, side));
+        processed.push(options.recordedAudio
+          ? await processRecordedAudioForCard(file, side)
+          : await processMediaForCard(file, side));
       }
       setMedia((current) => [...current, ...processed]);
     } catch (err) {
@@ -162,7 +164,7 @@ function AudioPreview({ media }: { media: PendingCardMedia }) {
 function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
   side: CardSide;
   media: PendingCardMedia[];
-  onAdd: (files: FileList | File[], side: CardSide) => Promise<void>;
+  onAdd: (files: FileList | File[], side: CardSide, options?: { recordedAudio?: boolean }) => Promise<void>;
   onRemove: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
   onPreview: (media: PendingCardMedia) => void;
@@ -203,7 +205,7 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
         const blob = new Blob(recordedChunks, { type: finalMimeType });
         const fileExt = recordingExtension(finalMimeType);
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-        void onAdd([new File([blob], `nahravka-${stamp}.${fileExt}`, { type: finalMimeType })], side);
+        void onAdd([new File([blob], `nahravka-${stamp}.${fileExt}`, { type: finalMimeType })], side, { recordedAudio: true });
         stream.getTracks().forEach((track) => track.stop());
         setRecorder(null);
       };
@@ -248,7 +250,13 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
       <div className="pending-image-grid">
         {media.map((item, index) => (
           <figure className="pending-image" key={item.id}>
-            <button type="button" onClick={() => onPreview(item)}>{item.type === 'audio' ? '🎵' : <ObjectImage blob={item.blob} alt={item.name} />}</button>
+            <button type="button" onClick={() => onPreview(item)}>
+              {item.type === 'audio' ? (
+                <div className="audio-icon-preview">🎵</div>
+              ) : (
+                <ObjectImage blob={item.blob} alt={item.name} />
+              )}
+            </button>
             <div className="image-actions">
               <button type="button" className="tiny-button" onClick={() => onMove(item.id, -1)} disabled={index === 0}>←</button>
               <button type="button" className="tiny-button" onClick={() => onMove(item.id, 1)} disabled={index === media.length - 1}>→</button>

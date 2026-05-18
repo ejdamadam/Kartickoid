@@ -1,8 +1,11 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef, type TouchEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import HomePage from '../pages/HomePage';
 import DeckPage from '../pages/DeckPage';
 import StudyPage from '../pages/StudyPage';
+import MatchPage from '../pages/MatchPage';
+import TestPage from '../pages/TestPage';
+import QuickGamePage from '../pages/QuickGamePage';
 import ImportPage from '../pages/ImportPage';
 import StatsPage from '../pages/StatsPage';
 import HelpPage from '../pages/HelpPage';
@@ -11,6 +14,7 @@ import OfflineStatus from '../components/OfflineStatus';
 import Modal from '../components/Modal';
 import SettingsModal from '../components/SettingsModal';
 import { downloadBackup } from '../services/exportImport';
+import { completeOneDriveRedirect } from '../services/oneDriveSync';
 import { db } from '../db/database';
 import { nowIso } from '../utils/date';
 import { t } from '../i18n';
@@ -21,17 +25,27 @@ type Route =
   | { name: 'home' }
   | { name: 'deck'; deckId: string }
   | { name: 'study'; deckIds: string[]; tags: string[]; source?: StudySessionSource; limit?: number; order?: 'default' | 'random' }
+  | { name: 'match'; deckId: string }
+  | { name: 'test'; deckId: string }
+  | { name: 'game'; deckId: string }
   | { name: 'import' }
   | { name: 'stats' }
   | { name: 'help' };
 
 export default function App() {
-  const [route, setRoute] = useState<Route>({ name: 'home' });
+  const [routeStack, setRouteStack] = useState<Route[]>([{ name: 'home' }]);
+  const route = routeStack.at(-1) ?? { name: 'home' };
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [modal, setModal] = useState<'settings' | 'about'>();
 
   useEffect(() => {
+    void completeOneDriveRedirect().then((result) => {
+      if (result.error) {
+        console.warn(result.error);
+      }
+    });
+
     async function checkBackupReminder() {
         // Wait briefly for initial DB sync or just ensure we don't trigger if meta is undefined
         const meta = await db.appMeta.get('lastBackupAt');
@@ -64,16 +78,36 @@ export default function App() {
   }, []);
 
   const refresh = useCallback(() => setRefreshKey((prev) => prev + 1), []);
+  const navigate = useCallback((nextRoute: Route) => {
+    setRouteStack((stack) => {
+      const current = stack.at(-1);
+      if (current && routeKey(current) === routeKey(nextRoute)) return stack;
+      return [...stack, nextRoute];
+    });
+  }, []);
+  const goBack = useCallback(() => {
+    setRouteStack((stack) => stack.length > 1 ? stack.slice(0, -1) : stack);
+  }, []);
+  const canGoBack = routeStack.length > 1;
+  const showBackButton = route.name !== 'home' && canGoBack;
+
+  const gestureHandlers = useSwipeNavigation({
+    drawerOpen,
+    canGoBack,
+    onOpenDrawer: () => setDrawerOpen(true),
+    onCloseDrawer: () => setDrawerOpen(false),
+    onBack: goBack
+  });
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" {...gestureHandlers}>
       <AppDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        onHome={() => setRoute({ name: 'home' })}
-        onImport={() => setRoute({ name: 'import' })}
-        onStats={() => setRoute({ name: 'stats' })}
-        onHelp={() => setRoute({ name: 'help' })}
+        onHome={() => navigate({ name: 'home' })}
+        onImport={() => navigate({ name: 'import' })}
+        onStats={() => navigate({ name: 'stats' })}
+        onHelp={() => navigate({ name: 'help' })}
         onSettings={() => setModal('settings')}
         onAbout={() => setModal('about')}
       />
@@ -88,25 +122,37 @@ export default function App() {
         {route.name !== 'study' && (
           <header className="app-header">
             <button className="icon-button" onClick={() => setDrawerOpen(true)} aria-label="Menu">☰</button>
-            <button className="text-button" onClick={() => setRoute({ name: 'home' })}>← Domů</button>
+            {showBackButton ? (
+              <button
+                className="back-icon-button"
+                onClick={goBack}
+                aria-label="Zpět"
+                title="Zpět"
+              >
+                ←
+              </button>
+            ) : (
+              <span className="header-spacer" aria-hidden="true" />
+            )}
             <OfflineStatus />
           </header>
         )}
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={route.name}
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -10 }}
+            key={routeKey(route)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.14, ease: 'easeOut' }}
             className="route-container"
           >
             {route.name === 'home' && (
               <HomePage
                 refreshKey={refreshKey}
-                onOpenDeck={(deckId) => setRoute({ name: 'deck', deckId })}
+                onOpenDeck={(deckId) => navigate({ name: 'deck', deckId })}
                 onChanged={refresh}
-                onCustomStudy={(deckIds, tags) => setRoute({ name: 'study', deckIds, tags })}
+                onCustomStudy={(deckIds, tags) => navigate({ name: 'study', deckIds, tags })}
               />
             )}
 
@@ -114,8 +160,11 @@ export default function App() {
               <DeckPage
                 deckId={route.deckId}
                 refreshKey={refreshKey}
-                onBack={() => setRoute({ name: 'home' })}
-                onStudy={(options) => setRoute({ name: 'study', deckIds: [route.deckId], tags: [], ...options })}
+                onBack={goBack}
+                onStudy={(options) => navigate({ name: 'study', deckIds: [route.deckId], tags: [], ...options })}
+                onMatch={() => navigate({ name: 'match', deckId: route.deckId })}
+                onTest={() => navigate({ name: 'test', deckId: route.deckId })}
+                onGame={() => navigate({ name: 'game', deckId: route.deckId })}
                 onChanged={refresh}
               />
             )}
@@ -127,21 +176,27 @@ export default function App() {
                 initialSource={route.source}
                 initialLimit={route.limit}
                 initialOrder={route.order}
-                onBack={() => {
-                    if (route.deckIds.length === 1) {
-                        setRoute({ name: 'deck', deckId: route.deckIds[0] });
-                    } else {
-                        setRoute({ name: 'home' });
-                    }
-                }}
+                onBack={goBack}
                 onChanged={refresh}
               />
+            )}
+
+            {route.name === 'match' && (
+              <MatchPage deckId={route.deckId} onBack={goBack} />
+            )}
+
+            {route.name === 'test' && (
+              <TestPage deckId={route.deckId} onBack={goBack} />
+            )}
+
+            {route.name === 'game' && (
+              <QuickGamePage deckId={route.deckId} onBack={goBack} />
             )}
 
             {route.name === 'import' && (
               <ImportPage
                 onChanged={refresh}
-                onDeckCreated={(deckId) => setRoute({ name: 'deck', deckId })}
+                onDeckCreated={(deckId) => navigate({ name: 'deck', deckId })}
               />
             )}
 
@@ -157,4 +212,50 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function routeKey(route: Route): string {
+  return JSON.stringify(route);
+}
+
+function useSwipeNavigation({ drawerOpen, canGoBack, onOpenDrawer, onCloseDrawer, onBack }: {
+  drawerOpen: boolean;
+  canGoBack: boolean;
+  onOpenDrawer: () => void;
+  onCloseDrawer: () => void;
+  onBack: () => void;
+}) {
+  const touchStart = useRef<{ x: number; y: number; drawerOpen: boolean } | undefined>(undefined);
+
+  return {
+    onTouchStart: (event: TouchEvent<HTMLDivElement>) => {
+      const touch = event.touches[0];
+      touchStart.current = { x: touch.clientX, y: touch.clientY, drawerOpen };
+    },
+    onTouchEnd: (event: TouchEvent<HTMLDivElement>) => {
+      const start = touchStart.current;
+      touchStart.current = undefined;
+      if (!start) return;
+
+      const touch = event.changedTouches[0];
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      const horizontal = Math.abs(dx) > 72 && Math.abs(dx) > Math.abs(dy) * 1.8;
+      if (!horizontal) return;
+
+      if (start.drawerOpen && dx < -72) {
+        onCloseDrawer();
+        return;
+      }
+
+      if (!start.drawerOpen && start.x <= 28 && dx > 72) {
+        onOpenDrawer();
+        return;
+      }
+
+      if (!start.drawerOpen && canGoBack && start.x > 28 && start.x <= 96 && dx > 84) {
+        onBack();
+      }
+    }
+  };
 }

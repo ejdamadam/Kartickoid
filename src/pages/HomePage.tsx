@@ -4,6 +4,8 @@ import DeckForm from '../components/DeckForm';
 import { createDeckInput, db, deleteDeckCascade } from '../db/database';
 import type { Deck, DeckSummary } from '../types';
 import { formatDateTime, nowIso } from '../utils/date';
+import { createBackupZipFile } from '../services/exportImport';
+import { getOneDriveSettings, uploadOneDriveBackup, type OneDriveSettings } from '../services/oneDriveSync';
 import { t } from '../i18n';
 
 interface HomePageProps {
@@ -22,6 +24,8 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string>();
+  const [oneDriveSettings, setOneDriveSettings] = useState<OneDriveSettings>();
+  const [syncStatus, setSyncStatus] = useState<string>();
   const pendingScrollY = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -54,6 +58,18 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
         requestAnimationFrame(() => window.scrollTo(0, scrollY));
       }
     });
+    return () => { active = false; };
+  }, [refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    getOneDriveSettings()
+      .then((settings) => {
+        if (active) setOneDriveSettings(settings?.connected ? settings : undefined);
+      })
+      .catch(() => {
+        if (active) setOneDriveSettings(undefined);
+      });
     return () => { active = false; };
   }, [refreshKey]);
 
@@ -105,6 +121,22 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
     }
   }
 
+  async function syncOneDriveBackup() {
+    setError(undefined);
+    setSyncStatus('Připravuji ZIP zálohu…');
+    try {
+      const file = await createBackupZipFile();
+      setSyncStatus('Nahrávám zálohu na OneDrive…');
+      await uploadOneDriveBackup(file.blob, file.name);
+      const nextSettings = await getOneDriveSettings();
+      setOneDriveSettings(nextSettings?.connected ? nextSettings : undefined);
+      setSyncStatus(`Záloha nahrána: ${formatDateTime(nextSettings?.lastBackupAt || nowIso())}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+      setSyncStatus(undefined);
+    }
+  }
+
   function toggleDeckSelection(id: string) {
     setSelectedDecks(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   }
@@ -152,6 +184,22 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
             </div>
             <span>{t.home.reviewed}</span>
           </div>
+          {oneDriveSettings && (
+            <div className="dashboard-card sync-card">
+              <div>
+                <p className="eyebrow">OneDrive</p>
+                <strong>{syncStatus ? 'Pracuji…' : 'Záloha'}</strong>
+                <p className="last-studied">
+                  {syncStatus
+                    ?? (oneDriveSettings.lastBackupAt ? `Naposledy: ${formatDateTime(oneDriveSettings.lastBackupAt)}` : 'Zatím bez cloudové zálohy')}
+                </p>
+                <small>Externí synchronizace je zatím ve vývoji.</small>
+              </div>
+              <button className="light-button" disabled={Boolean(syncStatus)} onClick={() => void syncOneDriveBackup()}>
+                Synchronizovat
+              </button>
+            </div>
+          )}
         </section>
       )}
 

@@ -6,22 +6,21 @@ interface CardMediaListProps {
   media: Media[];
   side: CardSide;
   onRemove?: (mediaId: string) => void;
+  hideMeta?: boolean;
 }
 
-export default function CardMediaList({ media, side, onRemove }: CardMediaListProps) {
+export default function CardMediaList({ media, side, onRemove, hideMeta }: CardMediaListProps) {
   const items = media.filter((item) => item.side === side);
   if (items.length === 0) return null;
 
   return (
     <div className="media-grid">
       {items.map((item) => (
-        <figure key={item.id} className="media-item" onClick={(e) => {
-          if (item.type === 'audio') {
-            e.stopPropagation();
-          }
-        }}>
+        <figure key={item.id} className="media-item">
           {item.type === 'audio' ? (
-            <AudioPlayer media={item} />
+            <div onClick={(e) => e.stopPropagation()}>
+              <AudioPlayer media={item} hideMeta={hideMeta} />
+            </div>
           ) : (
             <ObjectImage blob={item.blob} alt={item.name || 'Obrázek kartičky'} />
           )}
@@ -36,7 +35,7 @@ export default function CardMediaList({ media, side, onRemove }: CardMediaListPr
   );
 }
 
-function AudioPlayer({ media }: { media: Media }) {
+function AudioPlayer({ media, hideMeta }: { media: Media; hideMeta?: boolean }) {
   const [url, setUrl] = useState<string>();
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
 
@@ -81,7 +80,7 @@ function AudioPlayer({ media }: { media: Media }) {
           onError={() => setState('error')}
         />
       )}
-      {state === 'ready' && meta && <small className="media-meta">{meta}</small>}
+      {state === 'ready' && !hideMeta && meta && <small className="media-meta">{meta}</small>}
     </div>
   );
 }

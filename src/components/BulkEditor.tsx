@@ -34,9 +34,13 @@ export default function BulkEditor({ deckId, onCreate, onCancel }: BulkEditorPro
           value={text}
           onChange={(event) => setText(event.target.value)}
           rows={8}
-          placeholder="Otázka :: Odpověď :: tagy"
+          placeholder="pojem: vysvětlení"
         />
       </label>
+      <p className="muted">
+        Každá dvojice patří na samostatný řádek. Základní formát je <code>pojem: vysvětlení</code>;
+        starší zápis <code>otázka :: odpověď :: tagy</code> funguje dál.
+      </p>
       <div className="preview-list">
         {preview.cards.slice(0, 8).map((card, index) => (
           <div className={`preview-row ${card.errors.length ? 'invalid' : ''}`} key={`${card.frontText}-${index}`}>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import BulkEditor from '../components/BulkEditor';
 import CardForm, { type CardFormValues } from '../components/CardForm';
 import CardMediaList from '../components/CardMediaList';
+import MultiCardCreator from '../components/MultiCardCreator';
 import RichTextDisplay from '../components/RichTextDisplay';
 import Modal from '../components/Modal';
 import CardStatistics from '../components/CardStatistics';
@@ -20,21 +21,27 @@ interface DeckPageProps {
   refreshKey: number;
   onBack: () => void;
   onStudy: (options?: { source?: StudySessionSource; limit?: number; order?: 'default' | 'random' }) => void;
+  onMatch: () => void;
+  onTest: () => void;
+  onGame: () => void;
   onChanged: () => void;
 }
 
 type EditableCard = Card | 'new';
 type DeckStudySource = Extract<StudySessionSource, 'all' | 'lapsed' | 'mistakes' | 'new' | 'due'>;
+type BulkAddMode = 'visual' | 'raw';
 
-export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChanged }: DeckPageProps) {
+export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch, onTest, onGame, onChanged }: DeckPageProps) {
   const [deck, setDeck] = useState<Deck>();
   const [cards, setCards] = useState<Card[]>([]);
   const [media, setMedia] = useState<Media[]>([]);
   const [logs, setLogs] = useState<ReviewLog[]>([]);
   const [editingCard, setEditingCard] = useState<EditableCard>();
-  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkAddOpen, setBulkAddOpen] = useState(false);
+  const [bulkAddMode, setBulkAddMode] = useState<BulkAddMode>('visual');
   const [query, setQuery] = useState('');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [starFilter, setStarFilter] = useState<'all' | 'starred' | 'unstarred'>('all');
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'list' | 'stats'>('list');
@@ -119,11 +126,15 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         || card.backText.toLowerCase().includes(normalizedQuery)
         || card.tags.some((tag) => tag.includes(normalizedQuery));
       const matchesTag = tagFilter.length === 0 || tagFilter.some((tag) => card.tags.includes(tag));
-      return matchesText && matchesTag;
+      const matchesStar = starFilter === 'all'
+        || (starFilter === 'starred' && card.starred === true)
+        || (starFilter === 'unstarred' && card.starred !== true);
+      return matchesText && matchesTag && matchesStar;
     });
-  }, [cards, query, tagFilter]);
+  }, [cards, query, tagFilter, starFilter]);
 
   async function flipSide(card: Card) {
+    pendingScrollY.current = window.scrollY;
     try {
       await db.cards.update(card.id, {
         frontText: card.backText,
@@ -136,13 +147,25 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
           side: item.side === 'front' ? 'back' : 'front'
         });
       }
+      setCards((current) => current.map((item) => item.id === card.id ? {
+        ...item,
+        frontText: card.backText,
+        backText: card.frontText,
+        updatedAt: nowIso()
+      } : item));
+      setMedia((current) => current.map((item) => item.cardId === card.id ? {
+        ...item,
+        side: item.side === 'front' ? 'back' : 'front'
+      } : item));
       onChanged();
     } catch (err) {
+      pendingScrollY.current = undefined;
       setError(err instanceof Error ? err.message : t.common.error);
     }
   }
 
   async function saveCard(values: CardFormValues) {
+    pendingScrollY.current = window.scrollY;
     try {
       if (editingCard === 'new') {
         const card = createCardInput(deckId, values.frontText, values.backText, values.tags);
@@ -177,6 +200,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
       setEditingCard(undefined);
       onChanged();
     } catch (err) {
+      pendingScrollY.current = undefined;
       setError(err instanceof Error ? err.message : t.common.error);
     }
   }
@@ -194,11 +218,45 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   }
 
   async function bulkCreate(nextCards: Card[]) {
+    pendingScrollY.current = window.scrollY;
     try {
       await db.cards.bulkAdd(nextCards);
       await db.decks.update(deckId, { updatedAt: nowIso() });
-      setBulkOpen(false);
+      setBulkAddOpen(false);
       onChanged();
+    } catch (err) {
+      pendingScrollY.current = undefined;
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  async function createMultipleCards(values: CardFormValues[]) {
+    pendingScrollY.current = window.scrollY;
+    try {
+      for (const item of values) {
+        const card = createCardInput(deckId, item.frontText, item.backText, item.tags);
+        const cardId = await db.cards.add(card);
+        for (const mediaItem of item.media) {
+          await addMediaToCard({ ...mediaItem, cardId, deckId });
+        }
+      }
+      await db.decks.update(deckId, { updatedAt: nowIso() });
+      setBulkAddOpen(false);
+      onChanged();
+    } catch (err) {
+      pendingScrollY.current = undefined;
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  async function toggleStarred(card: Card) {
+    try {
+      const starred = card.starred !== true;
+      await db.cards.update(card.id, {
+        starred,
+        updatedAt: nowIso()
+      });
+      setCards((current) => current.map((item) => item.id === card.id ? { ...item, starred, updatedAt: nowIso() } : item));
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     }
@@ -285,6 +343,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
 
   async function uploadMedia(card: Card, side: CardSide, file?: File) {
     if (!file) return;
+    pendingScrollY.current = window.scrollY;
     try {
       const item = await processMediaForCard(file, side);
       await addMediaToCard({ ...item, cardId: card.id, deckId });
@@ -319,7 +378,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
   if (!deck && !loading) {
     return (
       <section className="page">
-        <button className="back-button" onClick={onBack}>← {t.common.back}</button>
+        <button className="back-icon-button" onClick={onBack} aria-label={t.common.back} title={t.common.back}>←</button>
         <p className="error-box">{t.deck.missingDeck}</p>
       </section>
     );
@@ -338,8 +397,11 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         </div>
         <div className="toolbar">
           <button className="primary-button" onClick={startStudy}>{t.deck.study}</button>
+          <button className="secondary-button" onClick={onMatch}>Match</button>
+          <button className="secondary-button" onClick={onTest}>Test</button>
+          <button className="secondary-button" onClick={onGame}>Rychlá odpověď</button>
           <button className="secondary-button" onClick={() => setEditingCard('new')}>{t.deck.newCard}</button>
-          <button className="secondary-button" onClick={() => setBulkOpen(true)}>{t.deck.bulkEditor}</button>
+          <button className="secondary-button" onClick={() => setBulkAddOpen(true)}>Přidat více kartiček</button>
           <button className="secondary-button" onClick={exportCsv}>{t.deck.csvExport}</button>
           <button className="secondary-button" onClick={exportDeck}>{t.deck.exportDeck}</button>
           <button className="secondary-button" onClick={duplicateDeck}>{t.deck.duplicate}</button>
@@ -405,6 +467,14 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
               {t.common.search}
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.deck.searchPlaceholder} />
             </label>
+            <label>
+              Hvězdičky
+              <select value={starFilter} onChange={(event) => setStarFilter(event.target.value as typeof starFilter)}>
+                <option value="all">Všechny kartičky</option>
+                <option value="starred">Pouze s hvězdičkou</option>
+                <option value="unstarred">Bez hvězdičky</option>
+              </select>
+            </label>
             <div className="tag-filter-panel" aria-label="Filtr tagů">
               {allTags.length === 0 ? (
                 <span className="muted">{t.deck.tagsEmpty}</span>
@@ -426,14 +496,25 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
               const cardMedia = media.filter((item) => item.cardId === card.id);
               return (
                 <article className="study-card-preview" key={card.id}>
+                  <div className="card-preview-header">
+                    <button
+                      className={`star-button ${card.starred === true ? 'active' : ''}`}
+                      type="button"
+                      onClick={() => void toggleStarred(card)}
+                      aria-label={card.starred === true ? 'Odebrat hvězdičku' : 'Označit hvězdičkou'}
+                      title={card.starred === true ? 'Odebrat hvězdičku' : 'Označit hvězdičkou'}
+                    >
+                      ★
+                    </button>
+                  </div>
                   <div className="card-preview-columns">
-                    <section>
+                    <section className="card-side-panel">
                       <p className="side-label">{t.deck.frontSide}</p>
                       <div className="card-text"><RichTextDisplay content={card.frontText} /></div>
                       <CardMediaList media={cardMedia} side="front" onRemove={removeMedia} />
                       <MediaUploadButtonToolbar card={card} side='front' onUpload={uploadMedia} />
                     </section>
-                    <section>
+                    <section className="card-side-panel">
                       <p className="side-label">{t.deck.backSide}</p>
                       <div className="card-text"><RichTextDisplay content={card.backText} /></div>
                       <CardMediaList media={cardMedia} side="back" onRemove={removeMedia} />
@@ -519,9 +600,31 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onChange
         </Modal>
       )}
 
-      {bulkOpen && (
-        <Modal title={t.deck.bulkEditor} onClose={() => setBulkOpen(false)}>
-          <BulkEditor deckId={deckId} onCreate={bulkCreate} onCancel={() => setBulkOpen(false)} />
+      {bulkAddOpen && (
+        <Modal title="Přidat více kartiček" onClose={() => setBulkAddOpen(false)}>
+          <div className="stack">
+            <div className="mode-tabs two-options" role="tablist" aria-label="Způsob hromadného přidání">
+              <button
+                type="button"
+                className={bulkAddMode === 'visual' ? 'active' : ''}
+                onClick={() => setBulkAddMode('visual')}
+              >
+                Vizuální editor
+              </button>
+              <button
+                type="button"
+                className={bulkAddMode === 'raw' ? 'active' : ''}
+                onClick={() => setBulkAddMode('raw')}
+              >
+                Raw text
+              </button>
+            </div>
+            {bulkAddMode === 'visual' ? (
+              <MultiCardCreator onCreate={createMultipleCards} onCancel={() => setBulkAddOpen(false)} />
+            ) : (
+              <BulkEditor deckId={deckId} onCreate={bulkCreate} onCancel={() => setBulkAddOpen(false)} />
+            )}
+          </div>
         </Modal>
       )}
     </section>

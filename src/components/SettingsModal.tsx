@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { db } from '../db/database';
 import { formatDateTime, nowIso } from '../utils/date';
 import { useTheme, type TextSize } from '../contexts/ThemeContext';
+import { APP_VERSION } from '../app/version';
 import { processImageForCard } from '../services/imageProcessing';
 import {
   deleteBackupHistoryEntry,
+  createBackupZipFile,
   downloadBackup,
   downloadBackupHistoryEntry,
   downloadBackupZip,
@@ -12,9 +14,20 @@ import {
   getBackupHistory,
   importBackupFile,
   restoreBackupHistoryEntry,
-  shareBackup,
   type ImportMode
 } from '../services/exportImport';
+import {
+  deleteOneDriveBackup,
+  disconnectOneDrive,
+  downloadOneDriveBackup,
+  getOneDriveSettings,
+  listOneDriveBackups,
+  saveOneDriveClientId,
+  startOneDriveSignIn,
+  uploadOneDriveBackup,
+  type OneDriveBackupItem,
+  type OneDriveSettings
+} from '../services/oneDriveSync';
 import type { BackupHistoryEntry } from '../types';
 
 interface SettingsModalProps {
@@ -47,22 +60,101 @@ const textSizeOptions: { value: TextSize; label: string }[] = [
   { value: 'xlarge', label: 'Velmi velké' }
 ];
 
+interface StorageOverview {
+  decks: number;
+  cards: number;
+  media: number;
+  reviewLogs: number;
+  mediaBytes: number;
+  imageBytes: number;
+  audioBytes: number;
+  backupBytes: number;
+  backupCount: number;
+  appDataBytes: number;
+  estimatedTotalBytes: number;
+  browserUsageBytes?: number;
+  browserQuotaBytes?: number;
+  persistentStorage?: boolean;
+}
+
 export default function SettingsModal({ onClose }: SettingsModalProps) {
-  const { theme, setTheme, textSize, setTextSize, customBackground, setCustomBackground, clearCustomBackground } = useTheme();
+  const { theme, setTheme, textSize, setTextSize, colorMode, setColorMode, customBackground, setCustomBackground, clearCustomBackground } = useTheme();
   const [interval, setInterval] = useState(7);
   const [backgroundSaving, setBackgroundSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string>();
   const [settingsMessage, setSettingsMessage] = useState<string>();
   const [hardImportSettings, setHardImportSettings] = useState(false);
   const [backupHistory, setBackupHistory] = useState<BackupHistoryEntry[]>([]);
+  const [storageOverview, setStorageOverview] = useState<StorageOverview>();
+  const [oneDriveSettings, setOneDriveSettings] = useState<OneDriveSettings>();
+  const [oneDriveClientId, setOneDriveClientId] = useState('');
+  const [oneDriveBackups, setOneDriveBackups] = useState<OneDriveBackupItem[]>([]);
+  const [oneDriveBusy, setOneDriveBusy] = useState(false);
 
   useEffect(() => {
     db.appMeta.get('backupInterval').then(m => m && setInterval(Number(m.value)));
     void loadBackupHistory();
+    void loadStorageOverview();
+    void loadOneDriveState();
   }, []);
 
   async function loadBackupHistory() {
     setBackupHistory(await getBackupHistory());
+  }
+
+  async function loadOneDriveState() {
+    const settings = await getOneDriveSettings();
+    setOneDriveSettings(settings);
+    setOneDriveClientId(settings?.clientId ?? '');
+    if (settings?.connected) {
+      try {
+        setOneDriveBackups(await listOneDriveBackups());
+      } catch {
+        setOneDriveBackups([]);
+      }
+    }
+  }
+
+  async function loadStorageOverview() {
+    const [decks, cards, media, reviewLogs, appMeta, backups] = await Promise.all([
+      db.decks.toArray(),
+      db.cards.toArray(),
+      db.media.toArray(),
+      db.reviewLogs.toArray(),
+      db.appMeta.toArray(),
+      getBackupHistory()
+    ]);
+    const imageBytes = media.filter((item) => item.type === 'image').reduce((sum, item) => sum + item.blob.size, 0);
+    const audioBytes = media.filter((item) => item.type === 'audio').reduce((sum, item) => sum + item.blob.size, 0);
+    const mediaBytes = imageBytes + audioBytes;
+    const backupBytes = backups.reduce((sum, item) => sum + item.size, 0);
+    const appDataBytes = estimateJsonSize({
+      decks,
+      cards,
+      reviewLogs,
+      appMeta,
+      media: media.map(({ blob: _blob, ...item }) => item),
+      backups: backups.map(({ blob: _blob, ...item }) => item)
+    });
+    const storageEstimate = await navigator.storage?.estimate?.();
+    const persistentStorage = await navigator.storage?.persisted?.();
+
+    setStorageOverview({
+      decks: decks.length,
+      cards: cards.length,
+      media: media.length,
+      reviewLogs: reviewLogs.length,
+      mediaBytes,
+      imageBytes,
+      audioBytes,
+      backupBytes,
+      backupCount: backups.length,
+      appDataBytes,
+      estimatedTotalBytes: appDataBytes + mediaBytes + backupBytes,
+      browserUsageBytes: storageEstimate?.usage,
+      browserQuotaBytes: storageEstimate?.quota,
+      persistentStorage
+    });
   }
 
   async function updateInterval(days: number) {
@@ -79,6 +171,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     for (const media of orphans) {
         await db.media.delete(media.id);
     }
+    await loadStorageOverview();
     alert(`Smazáno ${orphans.length} nepřiřazených mediálních souborů.`);
   }
 
@@ -89,6 +182,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     for (const log of oldLogs) {
         await db.reviewLogs.delete(log.id);
     }
+    await loadStorageOverview();
     alert(`Smazáno ${oldLogs.length} záznamů starších než 1 rok.`);
   }
 
@@ -142,20 +236,6 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     }
   }
 
-  async function handleShareBackup() {
-    setSettingsError(undefined);
-    setSettingsMessage(undefined);
-    try {
-      const result = await shareBackup();
-      setSettingsMessage(result === 'shared'
-        ? 'Sdílení JSON zálohy bylo otevřeno.'
-        : 'Sdílení není v tomto prohlížeči dostupné, záloha byla stažena jako soubor.');
-      await loadBackupHistory();
-    } catch (err) {
-      setSettingsError(err instanceof Error ? err.message : 'Sdílení zálohy se nepodařilo.');
-    }
-  }
-
   async function handleDownloadBackup() {
     setSettingsError(undefined);
     setSettingsMessage(undefined);
@@ -163,6 +243,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       await downloadBackup();
       setSettingsMessage('JSON záloha byla vytvořena a uložena do historie.');
       await loadBackupHistory();
+      await loadStorageOverview();
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : 'Export zálohy se nepodařil.');
     }
@@ -175,6 +256,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       await downloadBackupZip();
       setSettingsMessage('ZIP záloha byla vytvořena a uložena do historie. Média jsou uložená jako samostatné soubory.');
       await loadBackupHistory();
+      await loadStorageOverview();
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : 'Export ZIP zálohy se nepodařil.');
     }
@@ -200,6 +282,107 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     if (!ok) return;
     await deleteBackupHistoryEntry(id);
     await loadBackupHistory();
+    await loadStorageOverview();
+  }
+
+  async function handleSaveOneDriveClientId() {
+    setSettingsError(undefined);
+    setSettingsMessage(undefined);
+    try {
+      const settings = await saveOneDriveClientId(oneDriveClientId);
+      setOneDriveSettings(settings);
+      setSettingsMessage('OneDrive konfigurace byla uložena.');
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'OneDrive konfiguraci se nepodařilo uložit.');
+    }
+  }
+
+  async function handleConnectOneDrive() {
+    setSettingsError(undefined);
+    setSettingsMessage(undefined);
+    try {
+      await startOneDriveSignIn(oneDriveClientId);
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Přihlášení k OneDrive se nepodařilo spustit.');
+    }
+  }
+
+  async function handleDisconnectOneDrive() {
+    const ok = window.confirm('Odpojit OneDrive z tohoto zařízení? Cloudové zálohy zůstanou uložené v OneDrive.');
+    if (!ok) return;
+    await disconnectOneDrive();
+    setOneDriveSettings(undefined);
+    setOneDriveBackups([]);
+    setSettingsMessage('OneDrive byl odpojený z tohoto zařízení.');
+  }
+
+  async function handleRefreshOneDriveBackups() {
+    setOneDriveBusy(true);
+    setSettingsError(undefined);
+    setSettingsMessage(undefined);
+    try {
+      setOneDriveBackups(await listOneDriveBackups());
+      setOneDriveSettings(await getOneDriveSettings());
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Seznam OneDrive záloh se nepodařilo načíst.');
+    } finally {
+      setOneDriveBusy(false);
+    }
+  }
+
+  async function handleUploadOneDriveBackup() {
+    setOneDriveBusy(true);
+    setSettingsError(undefined);
+    setSettingsMessage(undefined);
+    try {
+      const file = await createBackupZipFile();
+      await uploadOneDriveBackup(file.blob, file.name);
+      setSettingsMessage(`ZIP záloha ${file.name} byla nahrána na OneDrive.`);
+      await loadOneDriveState();
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Upload zálohy na OneDrive se nepodařil.');
+    } finally {
+      setOneDriveBusy(false);
+    }
+  }
+
+  async function handleRestoreOneDriveBackup(item: OneDriveBackupItem) {
+    const ok = window.confirm(`Obnovit lokální data ze zálohy ${item.name}? Před obnovou se vytvoří bezpečnostní snapshot.`);
+    if (!ok) return;
+    setOneDriveBusy(true);
+    setSettingsError(undefined);
+    setSettingsMessage(undefined);
+    try {
+      const blob = await downloadOneDriveBackup(item.name);
+      const summary = await importBackupFile(new File([blob], item.name, { type: 'application/zip' }), {
+        mode: 'reset',
+        importSettings: true,
+        createSafetySnapshot: true
+      });
+      setSettingsMessage(formatImportSummary(summary));
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Obnova z OneDrive se nepodařila.');
+    } finally {
+      setOneDriveBusy(false);
+    }
+  }
+
+  async function handleDeleteOneDriveBackup(item: OneDriveBackupItem) {
+    const ok = window.confirm(`Smazat OneDrive zálohu ${item.name}?`);
+    if (!ok) return;
+    setOneDriveBusy(true);
+    setSettingsError(undefined);
+    setSettingsMessage(undefined);
+    try {
+      await deleteOneDriveBackup(item.name);
+      setSettingsMessage('OneDrive záloha byla smazána.');
+      await handleRefreshOneDriveBackups();
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'OneDrive zálohu se nepodařilo smazat.');
+    } finally {
+      setOneDriveBusy(false);
+    }
   }
 
   async function forceUpdate() {
@@ -253,6 +436,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           ))}
         </div>
 
+        <h3>Režim zobrazení</h3>
+        <div className="segmented settings-segmented two-options" role="group" aria-label="Režim zobrazení">
+          <button type="button" className={colorMode === 'light' ? 'active' : ''} onClick={() => setColorMode('light')}>Světlý</button>
+          <button type="button" className={colorMode === 'dark' ? 'active' : ''} onClick={() => setColorMode('dark')}>Tmavý</button>
+        </div>
+
         <h3>Vlastní pozadí</h3>
         <div className="settings-background-row">
           <label className="upload-button secondary-button">
@@ -272,14 +461,120 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           </button>
         </div>
         {customBackground && <p className="muted">Aktivní pozadí: {customBackground.name}</p>}
+
+        <section className="storage-overview">
+          <div className="section-title">
+            <h3>Využití úložiště</h3>
+            <button className="tiny-button" type="button" onClick={() => void loadStorageOverview()}>Přepočítat</button>
+          </div>
+          {storageOverview ? (
+            <>
+              <div className="metric-grid storage-metric-grid">
+                <span><strong>{formatBytes(storageOverview.estimatedTotalBytes)}</strong> odhad dat aplikace</span>
+                <span><strong>{formatBytes(storageOverview.mediaBytes)}</strong> média</span>
+                <span><strong>{formatBytes(storageOverview.backupBytes)}</strong> lokální zálohy</span>
+                <span><strong>{formatBytes(storageOverview.appDataBytes)}</strong> texty a metadata</span>
+              </div>
+              <div className="storage-breakdown">
+                <span>{storageOverview.decks} balíčků</span>
+                <span>{storageOverview.cards} kartiček</span>
+                <span>{storageOverview.media} médií</span>
+                <span>{storageOverview.reviewLogs} záznamů procvičování</span>
+                <span>Obrázky {formatBytes(storageOverview.imageBytes)}</span>
+                <span>Audio {formatBytes(storageOverview.audioBytes)}</span>
+                <span>{storageOverview.backupCount} záloh v historii</span>
+              </div>
+              {storageOverview.browserUsageBytes !== undefined && (
+                <p className="muted">
+                  Prohlížeč hlásí využití {formatBytes(storageOverview.browserUsageBytes)}
+                  {storageOverview.browserQuotaBytes ? ` z limitu přibližně ${formatBytes(storageOverview.browserQuotaBytes)}` : ''}.
+                  {storageOverview.persistentStorage !== undefined ? ` Trvalé úložiště: ${storageOverview.persistentStorage ? 'ano' : 'ne'}.` : ''}
+                </p>
+              )}
+              <p className="muted">Jde o praktický odhad: média a uložené zálohy se počítají podle velikosti blobů, texty a metadata podle JSON reprezentace.</p>
+            </>
+          ) : (
+            <p className="muted">Počítám velikost dat...</p>
+          )}
+        </section>
         
         <h3>Záloha a import</h3>
-        <p className="muted">Import přijímá JSON i ZIP zálohy automaticky. JSON je zpětně kompatibilní a ukládá média jako base64, ZIP obsahuje backup.json a média jako samostatné soubory.</p>
+        <p className="muted">ZIP je doporučená kompletní záloha: obsahuje backup.json a média jako samostatné soubory. JSON ponechte hlavně pro pokročilou kontrolu nebo starší workflow.</p>
         <div className="button-row">
-          <button className="primary-button" type="button" onClick={handleDownloadBackup}>Exportovat JSON</button>
-          <button className="secondary-button" type="button" onClick={handleShareBackup}>Sdílet JSON</button>
-          <button className="secondary-button" type="button" onClick={handleDownloadZipBackup}>Exportovat ZIP</button>
+          <button className="primary-button" type="button" onClick={handleDownloadZipBackup}>Exportovat ZIP zálohu</button>
+          <button className="secondary-button" type="button" onClick={handleDownloadBackup}>Exportovat JSON</button>
         </div>
+
+        <section className="onedrive-panel">
+          <div className="section-title">
+            <h3>OneDrive zálohy</h3>
+            <span>{oneDriveSettings?.connected ? 'připojeno' : 'experimentální'}</span>
+          </div>
+          <p className="muted">
+            OneDrive je experimentální funkce a nemusí být plně stabilní ve všech prohlížečích nebo účtech. Zálohování používá aplikační složku Kartičkoid v OneDrive a vyžaduje vlastní Microsoft Entra Application (client) ID se scope Files.ReadWrite.AppFolder a redirect URI této aplikace.
+          </p>
+          <details className="settings-help-box" open={!oneDriveSettings?.clientId}>
+            <summary>Jak OneDrive zprovoznit</summary>
+            <ol>
+              <li>Otevřete Microsoft Entra admin center a vytvořte novou registraci aplikace.</li>
+              <li>Jako typ účtů zvolte osobní Microsoft účty nebo kombinaci pracovních a osobních účtů podle toho, kde OneDrive používáte.</li>
+              <li>V části Authentication přidejte platformu Single-page application a jako Redirect URI vložte hodnotu zobrazenou níže.</li>
+              <li>V části API permissions přidejte Microsoft Graph oprávnění <code>Files.ReadWrite.AppFolder</code>. Oprávnění umožní přístup jen do aplikační složky Kartičkoid v OneDrive.</li>
+              <li>Zkopírujte Application (client) ID, vložte ho sem a klikněte na Uložit konfiguraci.</li>
+              <li>Klikněte na Připojit OneDrive, dokončete Microsoft přihlášení a po návratu do aplikace použijte Nahrát ZIP zálohu na OneDrive.</li>
+            </ol>
+            <p className="muted">Pro lokální test použijte přesně aktuálně zobrazené redirect URI. Pro nasazenou GitHub Pages verzi bude potřeba přidat i její produkční URL.</p>
+          </details>
+          <label>
+            Microsoft Application (client) ID
+            <input
+              value={oneDriveClientId}
+              onChange={(event) => setOneDriveClientId(event.target.value)}
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            />
+          </label>
+          <p className="muted">Redirect URI pro registraci: <code>{typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : ''}</code></p>
+          <div className="button-row">
+            <button className="secondary-button" type="button" onClick={handleSaveOneDriveClientId} disabled={oneDriveBusy}>Uložit konfiguraci</button>
+            <button className="primary-button" type="button" onClick={handleConnectOneDrive} disabled={oneDriveBusy || !oneDriveClientId.trim()}>
+              {oneDriveSettings?.connected ? 'Znovu přihlásit OneDrive' : 'Připojit OneDrive'}
+            </button>
+            {oneDriveSettings?.connected && (
+              <button className="secondary-button" type="button" onClick={handleDisconnectOneDrive} disabled={oneDriveBusy}>Odpojit</button>
+            )}
+          </div>
+          {oneDriveSettings?.connected && (
+            <>
+              <p className="muted">
+                Připojeno {oneDriveSettings.accountName ? `jako ${oneDriveSettings.accountName}` : 'k OneDrive'}.
+                {oneDriveSettings.lastBackupAt ? ` Poslední upload: ${formatDateTime(oneDriveSettings.lastBackupAt)}.` : ''}
+              </p>
+              <div className="button-row">
+                <button className="primary-button" type="button" onClick={handleUploadOneDriveBackup} disabled={oneDriveBusy}>
+                  {oneDriveBusy ? 'Pracuji…' : 'Nahrát ZIP zálohu na OneDrive'}
+                </button>
+                <button className="secondary-button" type="button" onClick={handleRefreshOneDriveBackups} disabled={oneDriveBusy}>Načíst cloudové zálohy</button>
+              </div>
+              <div className="backup-history-list">
+                {oneDriveBackups.length === 0 ? (
+                  <p className="muted">Zatím tu není žádná OneDrive záloha načtená z aplikační složky.</p>
+                ) : oneDriveBackups.map((entry) => (
+                  <div className="backup-history-row" key={entry.id}>
+                    <div>
+                      <strong>{entry.name}</strong>
+                      <small>{formatDateTime(entry.modifiedAt)} · {formatBytes(entry.size)}</small>
+                    </div>
+                    <div className="button-row">
+                      <button className="tiny-button" type="button" onClick={() => void handleRestoreOneDriveBackup(entry)} disabled={oneDriveBusy}>Obnovit</button>
+                      {entry.webUrl && <a className="tiny-button" href={entry.webUrl} target="_blank" rel="noreferrer">Otevřít</a>}
+                      <button className="tiny-button" type="button" onClick={() => void handleDeleteOneDriveBackup(entry)} disabled={oneDriveBusy}>Smazat</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
 
         <section className="backup-history-list">
           <div className="section-title">
@@ -341,6 +636,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         <button className="secondary-button" onClick={purgeOrphanMedia}>Smazat nepřiřazená média</button>
         <button className="secondary-button" onClick={purgeOldLogs}>Smazat historii starší 1 rok</button>
         <button className="secondary-button" onClick={forceUpdate} style={{ color: '#d32f2f' }}>Vynutit aktualizaci aplikace</button>
+        <p className="muted">Verze aplikace: v{APP_VERSION}</p>
         <button className="secondary-button" type="button" onClick={onClose}>Zavřít</button>
       </div>
   );
@@ -353,8 +649,13 @@ function backupReasonLabel(reason: BackupHistoryEntry['reason']): string {
 }
 
 function formatBytes(value: number): string {
+  if (value <= 0) return '0 kB';
   if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} kB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function estimateJsonSize(value: unknown): number {
+  return new Blob([JSON.stringify(value)]).size;
 }
 
 function SettingsImportAction({ title, description, buttonLabel, danger, onFile }: {

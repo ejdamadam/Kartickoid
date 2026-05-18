@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { motion, useMotionValue, useTransform, type PanInfo, AnimatePresence } from 'framer-motion';
+import { animate, motion, useMotionValue, useTransform, type PanInfo, AnimatePresence } from 'framer-motion';
 import RichTextDisplay from '../components/RichTextDisplay';
 import CardMediaList from '../components/CardMediaList';
 import { db } from '../db/database';
-import { ratingLabels, scheduleCard } from '../services/scheduler';
+import { scheduleCard } from '../services/scheduler';
 import { loadStudyCards, type StudyFilter } from '../services/studySessions';
 import type { Card, Deck, Media, Rating, StudyMode, StudySessionSource } from '../types';
 import { compareFuzzy, type FuzzyResult } from '../utils/fuzzy';
@@ -47,6 +47,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   const [revealed, setRevealed] = useState(false);
   const [sessionKey, setSessionKey] = useState(0);
   const [completed, setCompleted] = useState(0);
+  const [previousCards, setPreviousCards] = useState<Card[]>([]);
   const [mistakeIds, setMistakeIds] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
@@ -81,6 +82,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
         
         setIndex(0);
         setCompleted(0);
+        setPreviousCards([]);
         setRevealed(false);
         setLoading(false);
       })
@@ -127,6 +129,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
         setMistakeIds((ids) => Array.from(new Set([...ids, card.id])));
       }
       onChanged();
+      setPreviousCards((cards) => [...cards, card]);
       setRevealed(false);
       setCompleted((value) => value + 1);
       setIndex((value) => value + 1);
@@ -139,6 +142,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   function startSession(nextSource: StudySessionSource, nextMode = mode) {
     setMode(nextMode);
     setSource(nextSource);
+    setPreviousCards([]);
     setSessionKey((value) => value + 1);
   }
 
@@ -147,7 +151,31 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
     setQueue(retryCards);
     setIndex(0);
     setCompleted(0);
+    setPreviousCards([]);
     setRevealed(false);
+  }
+
+  function goPreviousCard() {
+    const previous = previousCards.at(-1);
+    if (!previous || index <= 0) return;
+    setQueue((cards) => cards.map((card, cardIndex) => cardIndex === index - 1 ? previous : card));
+    setPreviousCards((cards) => cards.slice(0, -1));
+    setIndex((value) => Math.max(0, value - 1));
+    setCompleted((value) => Math.max(0, value - 1));
+    setRevealed(false);
+  }
+
+  async function toggleCurrentStarred(card: Card) {
+    try {
+      const starred = card.starred !== true;
+      await db.cards.update(card.id, { starred });
+      const updateCard = (item: Card) => item.id === card.id ? { ...item, starred } : item;
+      setQueue((cards) => cards.map(updateCard));
+      setAllCards((cards) => cards.map(updateCard));
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
   }
 
   if (loading) {
@@ -157,7 +185,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   return (
     <section className="study-page mobile-study">
       <div className="study-header-compact">
-        <button className="text-button" onClick={onBack}>← Zpět</button>
+        <button className="back-icon-button" onClick={onBack} aria-label="Zpět" title="Zpět">←</button>
         <h1>
             {deckNames.join(', ')}
         </h1>
@@ -211,6 +239,9 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
                 revealed={revealed}
                 onFlip={() => setRevealed((value) => !value)}
                 onRate={rate}
+                onPrevious={goPreviousCard}
+                canGoPrevious={previousCards.length > 0 && index > 0}
+                onToggleStarred={() => void toggleCurrentStarred(currentCard)}
               />
             )}
             {mode === 'test' && (
@@ -237,12 +268,15 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   );
 }
 
-function LearningCard({ card, media, revealed, onFlip, onRate }: {
+function LearningCard({ card, media, revealed, onFlip, onRate, onPrevious, canGoPrevious, onToggleStarred }: {
   card: Card;
   media: Media[];
   revealed: boolean;
   onFlip: () => void;
   onRate: (rating: Rating) => void;
+  onPrevious: () => void;
+  canGoPrevious: boolean;
+  onToggleStarred: () => void;
 }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -251,24 +285,42 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
   const againOpacity = useTransform(x, [-100, -18], [1, 0]);
   const easyOpacity = useTransform(y, [-100, -18], [1, 0]);
   const hardOpacity = useTransform(y, [18, 100], [0, 1]);
+  const [isDismissing, setIsDismissing] = useState(false);
+
+  async function dismissCard(rating: Rating, target: { x: number; y: number }) {
+    if (isDismissing) return;
+    setIsDismissing(true);
+    await Promise.all([
+      animate(x, target.x, { type: 'spring', stiffness: 260, damping: 28 }).finished,
+      animate(y, target.y, { type: 'spring', stiffness: 260, damping: 28 }).finished
+    ]);
+    onRate(rating);
+  }
 
   function onDragEnd(_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     const { offset, velocity } = info;
     const horizontal = Math.abs(offset.x) > Math.abs(offset.y);
     const forceX = Math.abs(offset.x) + Math.abs(velocity.x) * 0.18;
     const forceY = Math.abs(offset.y) + Math.abs(velocity.y) * 0.18;
+    const throwDistance = Math.max(window.innerWidth, window.innerHeight) * 1.15;
 
     if (horizontal && forceX > 120) {
-      onRate(offset.x > 0 ? 'good' : 'again');
+      void dismissCard(offset.x > 0 ? 'good' : 'again', {
+        x: offset.x > 0 ? throwDistance : -throwDistance,
+        y: offset.y * 0.35
+      });
       return;
     }
     if (!horizontal && forceY > 120) {
-      onRate(offset.y < 0 ? 'easy' : 'hard');
+      void dismissCard(offset.y < 0 ? 'easy' : 'hard', {
+        x: offset.x * 0.35,
+        y: offset.y < 0 ? -throwDistance : throwDistance
+      });
     }
   }
 
   function handleTap(event: any, info: any) {
-    const interactiveTarget = event.target.closest('audio, button, .media-grid, .media-item, .audio-shell');
+    const interactiveTarget = event.target.closest('audio, button, .audio-shell');
     if (interactiveTarget) {
       return;
     }
@@ -277,10 +329,10 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
 
   return (
     <div className="learning-shell">
-      <motion.article
-        className="swipe-card"
+      <motion.div
+        className="swipe-card-shell"
         style={{ x, y, rotate }}
-        drag
+        drag={!isDismissing}
         dragElastic={0.22}
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         whileTap={{ scale: 0.985 }}
@@ -292,12 +344,67 @@ function LearningCard({ card, media, revealed, onFlip, onRate }: {
         <motion.div className="swipe-indicator easy" style={{ opacity: easyOpacity }}>{t.study.easy}</motion.div>
         <motion.div className="swipe-indicator hard" style={{ opacity: hardOpacity }}>{t.study.hard}</motion.div>
 
-        <div className="review-side centered">
-          <p className="side-label">{revealed ? t.deck.backSide : t.deck.frontSide}</p>
-          <div className="review-text"><RichTextDisplay content={(revealed ? card.backText : card.frontText)} /></div>
-          <CardMediaList media={media} side={revealed ? 'back' : 'front'} />
-        </div>
-      </motion.article>
+        <motion.div
+          className="swipe-card"
+          animate={{ rotateY: revealed ? 180 : 0 }}
+          transition={{ duration: 0.46, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="flip-card-face flip-card-front">
+            <CardToolbar
+              starred={card.starred === true}
+              canGoPrevious={canGoPrevious}
+              onPrevious={onPrevious}
+              onToggleStarred={onToggleStarred}
+            />
+            <div className="review-side centered">
+              <p className="side-label">{t.deck.frontSide}</p>
+              <div className="review-text"><RichTextDisplay content={card.frontText} /></div>
+              <CardMediaList media={media} side="front" hideMeta />
+            </div>
+          </div>
+          <div className="flip-card-face flip-card-back">
+            <CardToolbar
+              starred={card.starred === true}
+              canGoPrevious={canGoPrevious}
+              onPrevious={onPrevious}
+              onToggleStarred={onToggleStarred}
+            />
+            <div className="review-side centered">
+              <p className="side-label">{t.deck.backSide}</p>
+              <div className="review-text"><RichTextDisplay content={card.backText} /></div>
+              <CardMediaList media={media} side="back" hideMeta />
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+      <p className="gesture-hint">{t.study.hint}</p>
+    </div>
+  );
+}
+
+function CardToolbar({ starred, canGoPrevious, onPrevious, onToggleStarred }: {
+  starred: boolean;
+  canGoPrevious: boolean;
+  onPrevious: () => void;
+  onToggleStarred: () => void;
+}) {
+  return (
+    <div className="study-card-toolbar">
+      <button
+        className={`star-button ${starred ? 'active' : ''}`}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleStarred();
+        }}
+        aria-label={starred ? 'Odebrat hvězdičku' : 'Označit hvězdičkou'}
+        title={starred ? 'Odebrat hvězdičku' : 'Označit hvězdičkou'}
+      >
+        ★
+      </button>
+      <button className="back-icon-button card-back-control" type="button" onClick={(event) => { event.stopPropagation(); onPrevious(); }} disabled={!canGoPrevious} aria-label="Předchozí kartička" title="Předchozí kartička">
+        ←
+      </button>
     </div>
   );
 }
@@ -520,18 +627,6 @@ function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, o
         <button className="secondary-button" onClick={() => onStart('due')}>{t.study.reset}</button>
         <button className="secondary-button" onClick={onBack}>{t.common.back}</button>
       </div>
-    </div>
-  );
-}
-
-function RatingButtons({ onRate }: { onRate: (rating: Rating) => void }) {
-  return (
-    <div className="rating-grid">
-      {(Object.keys(ratingLabels) as Rating[]).map((rating) => (
-        <button className={`rating-button rating-${rating}`} key={rating} onClick={() => onRate(rating)}>
-          {ratingLabels[rating]}
-        </button>
-      ))}
     </div>
   );
 }

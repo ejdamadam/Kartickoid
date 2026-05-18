@@ -6,7 +6,8 @@ import { processImageBlobForCard, processImageForCard as processImage } from './
 export const AUDIO_FILE_ACCEPT = 'audio/*,.m4a,.mp3,.wav,.webm,.ogg,.oga,.aac,.mp4';
 
 const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
-const TARGET_AUDIO_BITS_PER_SECOND = 32_000;
+const TARGET_AUDIO_BITS_PER_SECOND = 64_000;
+const TARGET_AUDIO_SAMPLE_RATE = 44_100;
 const AUDIO_EXTENSION_MIME: Record<string, string> = {
   aac: 'audio/aac',
   m4a: 'audio/mp4',
@@ -37,10 +38,25 @@ export async function processMediaForCard(file: File, side: CardSide): Promise<P
   throw new Error('Nepodporovaný formát souboru.');
 }
 
+export async function processRecordedAudioForCard(file: File, side: CardSide): Promise<PendingCardMedia> {
+  if (!isAudioFile(file.type, file.name)) {
+    throw new Error('Nahrávka nemá podporovaný zvukový formát.');
+  }
+
+  if (file.size > MAX_AUDIO_BYTES) {
+    throw new Error('Zvukový soubor je příliš velký. Zvolte prosím soubor do 100 MB.');
+  }
+
+  const mimeType = normalizeAudioMimeType(file.type, file.name);
+  const blob = file.type === mimeType ? file : file.slice(0, file.size, mimeType);
+
+  return createAudioMedia(blob, side, file.name || defaultAudioName(mimeType), mimeType);
+}
+
 export async function processImportedMedia(
   blob: Blob,
   side: CardSide,
-  options: { mimeType?: string; name?: string } = {}
+  options: { mimeType?: string; name?: string; compressAudio?: boolean; readAudioDuration?: boolean } = {}
 ): Promise<PendingCardMedia> {
   const mimeType = await detectMediaMimeType(blob, options.mimeType, options.name);
   const name = options.name || defaultMediaName(mimeType);
@@ -53,7 +69,10 @@ export async function processImportedMedia(
   if (mimeType.startsWith('audio/') || mimeType === 'video/mp4') {
     const audioMimeType = normalizeAudioMimeType(mimeType, name);
     const audioBlob = typedBlob.type === audioMimeType ? typedBlob : typedBlob.slice(0, typedBlob.size, audioMimeType);
-    return processAudioForCard(audioBlob, side, name, audioMimeType);
+    return processAudioForCard(audioBlob, side, name, audioMimeType, {
+      compress: options.compressAudio ?? false,
+      readDuration: options.readAudioDuration ?? false
+    });
   }
 
   throw new Error('Nepodporovaný formát média v importu.');
@@ -70,21 +89,41 @@ export function canBrowserPlayAudio(mimeType: string, name?: string): boolean {
   return candidates.length === 0 || candidates.some((candidate) => audio.canPlayType(candidate) !== '');
 }
 
-async function processAudioForCard(blob: Blob, side: CardSide, name: string, mimeType: string): Promise<PendingCardMedia> {
-  const durationSeconds = await readAudioDuration(blob);
-  const compressedBlob = await compressAudioBlob(blob);
+async function processAudioForCard(
+  blob: Blob,
+  side: CardSide,
+  name: string,
+  mimeType: string,
+  options: { compress?: boolean; readDuration?: boolean } = { compress: true, readDuration: true }
+): Promise<PendingCardMedia> {
+  const shouldCompress = options.compress ?? true;
+  const shouldReadDuration = options.readDuration ?? true;
+  const durationSeconds = shouldReadDuration ? await readAudioDuration(blob) : undefined;
+  const compressedBlob = shouldCompress ? await compressAudioBlob(blob) : undefined;
   const finalBlob = compressedBlob ?? blob;
   const finalDurationSeconds = compressedBlob ? await readAudioDuration(finalBlob) : durationSeconds;
+
+  return createAudioMedia(finalBlob, side, name, finalBlob.type || mimeType, finalDurationSeconds ?? durationSeconds ?? (shouldReadDuration ? undefined : null));
+}
+
+async function createAudioMedia(
+  blob: Blob,
+  side: CardSide,
+  name: string,
+  mimeType: string,
+  knownDurationSeconds?: number | null
+): Promise<PendingCardMedia> {
+  const durationSeconds = knownDurationSeconds === null ? undefined : knownDurationSeconds ?? await readAudioDuration(blob);
 
   return {
     id: createId('media'),
     side,
-    blob: finalBlob,
-    mimeType: finalBlob.type || mimeType,
+    blob,
+    mimeType: blob.type || mimeType,
     type: 'audio',
     name,
-    size: finalBlob.size,
-    durationSeconds: finalDurationSeconds ?? durationSeconds,
+    size: blob.size,
+    durationSeconds,
     createdAt: nowIso()
   };
 }
@@ -183,7 +222,7 @@ async function compressAudioBlob(sourceBlob: Blob): Promise<Blob | undefined> {
     await decodeContext.close();
     decodeContext = undefined;
 
-    audioContext = new AudioContextCtor({ sampleRate: Math.min(24_000, audioBuffer.sampleRate) });
+    audioContext = new AudioContextCtor({ sampleRate: Math.min(TARGET_AUDIO_SAMPLE_RATE, audioBuffer.sampleRate) });
     const source = audioContext.createBufferSource();
     const destination = audioContext.createMediaStreamDestination();
     const chunks: Blob[] = [];
@@ -196,11 +235,21 @@ async function compressAudioBlob(sourceBlob: Blob): Promise<Blob | undefined> {
     source.connect(destination);
 
     const recorded = new Promise<Blob>((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        if (recorder.state !== 'inactive') recorder.stop();
+        reject(new Error('Kompresní nahrávání vypršelo.'));
+      }, Math.max(6000, audioBuffer.duration * 1000 + 3000));
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data);
       };
-      recorder.onerror = () => reject(new Error('Audio se nepodařilo zkomprimovat.'));
-      recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || outputMimeType }));
+      recorder.onerror = () => {
+        window.clearTimeout(timeout);
+        reject(new Error('Audio se nepodařilo zkomprimovat.'));
+      };
+      recorder.onstop = () => {
+        window.clearTimeout(timeout);
+        resolve(new Blob(chunks, { type: recorder.mimeType || outputMimeType }));
+      };
     });
 
     recorder.start(250);

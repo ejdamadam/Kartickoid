@@ -1,13 +1,14 @@
 {
   "name": "local-flashcards-pwa",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
   "homepage": "https://ejdamadam.github.io/Kartickoid/",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "version:patch": "node scripts/bump-version.mjs",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },

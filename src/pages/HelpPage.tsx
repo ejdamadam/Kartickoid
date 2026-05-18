@@ -4,118 +4,157 @@ export default function HelpPage() {
       <div className="page-heading">
         <div>
           <p className="eyebrow">Dokumentace</p>
-          <h1>Uživatelská příručka</h1>
-          <p className="lead">Praktický průvodce pro první spuštění, každodenní procvičování, importy, zálohy a správu dat v aplikaci Kartičkoid.</p>
+          <h1>Návod</h1>
+          <p className="lead">Praktický průvodce pro první spuštění, tvorbu kartiček, procvičování, herní režimy a bezpečné zálohování v Kartičkoidu.</p>
         </div>
       </div>
 
       <div className="stack">
         <section className="panel">
-          <h2>Jak začít</h2>
+          <h2>Rychlý start pro nového uživatele</h2>
           <ol>
-            <li><strong>Vytvořte první balíček:</strong> Na úvodní stránce klikněte na Nový balíček, pojmenujte ho podle předmětu nebo tématu a případně přidejte krátký popis.</li>
-            <li><strong>Přidejte několik kartiček:</strong> Otevřete balíček, zvolte Nová kartička a vyplňte přední i zadní stranu. Začněte klidně s 10-20 kartami, ať si ověříte styl otázek.</li>
-            <li><strong>Používejte tagy:</strong> Tagy se hodí pro kapitoly, zkouškové okruhy nebo obtížnost. Později podle nich snadno vyberete vlastní procvičování napříč více balíčky.</li>
-            <li><strong>Procvičujte krátce a často:</strong> Lepší je několik minut každý den než dlouhé dohánění jednou týdně. Kartičkoid sám ukazuje, co je k opakování dnes.</li>
-            <li><strong>Po první větší úpravě udělejte zálohu:</strong> V Nastavení exportujte JSON zálohu. Je to nejjistější způsob, jak přenést nebo obnovit všechna data včetně médií.</li>
+            <li><strong>Vytvořte první balíček:</strong> na stránce Balíčky klikněte na Nový balíček. Název zvolte podle předmětu, kapitoly nebo konkrétní zkoušky.</li>
+            <li><strong>Přidejte první kartičku:</strong> otevřete balíček, klikněte na Nová kartička a vyplňte přední stranu jako otázku a zadní stranu jako odpověď.</li>
+            <li><strong>Přidejte víc karet najednou:</strong> použijte Přidat více kartiček. Vizuální editor je pomalejší, ale přehledný; raw text je rychlý pro obsah z poznámek.</li>
+            <li><strong>Spusťte procvičování:</strong> v balíčku vyberte zdroj kartiček, například Všechny kartičky, a klikněte na Procvičovat.</li>
+            <li><strong>Zálohujte přes ZIP:</strong> po větší práci otevřete import/export nebo Nastavení a stáhněte ZIP zálohu. ZIP je doporučená cesta pro kompletní obnovu.</li>
           </ol>
+          <p className="muted">Tip: Pro první test si vytvořte 5-10 jednoduchých kartiček. Rychle poznáte, jestli vám vyhovuje formulace otázek, a až potom má smysl přidávat větší množství.</p>
         </section>
 
         <section className="panel">
-          <h2>Doporučený postup pro nové uživatele</h2>
+          <h2>Základní workflow</h2>
+          <p>Kartičkoid je lokální aplikace v prohlížeči. Data se ukládají do zařízení, takže nepotřebujete účet ani server. Typický postup je: vytvořit balíček, přidat kartičky, učit se swipem, průběžně upravovat špatně formulované karty a pravidelně exportovat ZIP zálohu.</p>
           <ul>
-            <li><strong>Pište atomické otázky:</strong> Jedna kartička má zkoušet jednu věc. Místo dlouhé otázky s pěti fakty vytvořte pět kratších karet.</li>
-            <li><strong>Formulujte přední stranu aktivně:</strong> Dobrá otázka vás donutí vybavit odpověď z paměti, ne ji jen poznat v textu.</li>
-            <li><strong>Odpovídejte poctivě:</strong> Zvolte Znovu, když byste odpověď nedali bez nápovědy; Těžké, když jste ji dali váhavě; Dobré při normálním vybavení; Snadné jen tehdy, když byla opravdu okamžitá.</li>
-            <li><strong>Nepřetěžujte média:</strong> Obrázky a zvuky jsou výborné pro anatomii, jazyky nebo poznávačky, ale u běžných pojmů často stačí čistý text.</li>
-            <li><strong>Pravidelně čistěte a upravujte:</strong> Karty, které opakovaně selhávají, bývají moc široké nebo nejasné. Upravte otázku dřív, než jen donekonečna mačkat Znovu.</li>
+            <li><strong>Balíček:</strong> používejte jako větší celek, například Biologie, Angličtina B2 nebo Anatomie - svaly.</li>
+            <li><strong>Kartička:</strong> měla by zkoušet jednu konkrétní věc. Pokud je odpověď dlouhá, rozdělte ji na víc karet.</li>
+            <li><strong>Tagy:</strong> hodí se pro kapitoly, zdroje, prioritu nebo typ otázky. Později podle nich můžete filtrovat.</li>
+            <li><strong>Údržba:</strong> když se karta často plete, často je lepší ji přeformulovat než ji jen znovu a znovu opakovat.</li>
           </ul>
         </section>
 
         <section className="panel">
-          <h2>Stav aplikace</h2>
-          <p>V pravém horním rohu záhlaví uvidíte dva indikátory (tečky):</p>
+          <h2>Vytváření kartiček</h2>
+          <p>Každá kartička má přední a zadní stranu. Přední strana je obvykle otázka, pojem nebo obrázek k poznání. Zadní strana je odpověď, vysvětlení nebo správný název.</p>
           <ul>
-            <li><strong>Levá tečka:</strong> Internetové připojení. Zelená značí, že jste online.</li>
-            <li><strong>Pravá tečka:</strong> Připravenost pro offline. Zelená značí, že aplikace je plně načtena v mezipaměti a bude fungovat i bez signálu.</li>
+            <li><strong>Jedna kartička ručně:</strong> zvolte Nová kartička. Hodí se pro pečlivé zadání textu, tagů, obrázků nebo zvuků.</li>
+            <li><strong>Více kartiček vizuálně:</strong> zvolte Přidat více kartiček a nechte aktivní Vizuální editor. Začnete jednou prázdnou kartou, další přidáte plus buttonem pod poslední kartičkou.</li>
+            <li><strong>Raw import:</strong> ve stejném modalu přepněte na Raw text. Každá dvojice patří na samostatný řádek ve formátu <code>pojem: vysvětlení</code>.</li>
+            <li><strong>Starší raw formát:</strong> stále funguje i zápis <code>otázka :: odpověď :: tagy</code>, takže starší poznámky nemusíte přepisovat.</li>
+            <li><strong>Přílohy:</strong> obrázky přidávejte tam, kde nesou informaci: schémata, mapy, anatomie, poznávačky nebo vzorce. Zvuk je vhodný hlavně u jazyků.</li>
+          </ul>
+          <p><strong>Příklad raw vstupu:</strong></p>
+          <pre><code>{`ATP: Energetická měna buňky
+Mitochondrie: Elektrárna buňky
+Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
+          <p className="muted">Tip pro dobré kartičky: ptejte se konkrétně, odpověď držte krátkou a nedávejte na jednu kartu více nezávislých faktů.</p>
+        </section>
+
+        <section className="panel">
+          <h2>Přehled balíčku, hvězdičky a filtrování</h2>
+          <p>V detailu balíčku vidíte přední a zadní stranu každé kartičky odděleně. Delší texty zůstávají čitelné, karty můžete upravit, smazat, prohodit strany nebo doplnit média.</p>
+          <ul>
+            <li><strong>Hvězdička:</strong> označuje důležité, problematické nebo zkouškově klíčové kartičky. Zapnete ji v přehledu i přímo při procvičování.</li>
+            <li><strong>Filtr hvězdiček:</strong> v přehledu můžete zobrazit všechny kartičky, pouze označené nebo pouze neoznačené.</li>
+            <li><strong>Hledání:</strong> prohledává text na obou stranách a tagy.</li>
+            <li><strong>Tagy:</strong> klikáním na tagy rychle zúžíte balíček na konkrétní téma.</li>
           </ul>
         </section>
 
         <section className="panel">
-          <h2>Editor a formátování</h2>
-          <p>Aplikace využívá jednoduchý WYSIWYG editor, který ukládá obsah jako HTML. Text můžete kombinovat s médii a tagy, aniž byste potřebovali účet nebo server.</p>
+          <h2>Procvičování swipem</h2>
+          <p>Procvičování je hlavní režim pro učení. Kartičku otočíte klepnutím. Hodnocení obtížnosti se dělá gestem, ne tlačítky pod kartou, aby obrazovka zůstala čistá i na malém telefonu.</p>
           <ul>
-            <li><strong>Tučné písmo a kurzíva:</strong> Standardní značky <code>&lt;b&gt;</code> a <code>&lt;i&gt;</code>.</li>
-            <li><strong>Seznamy:</strong> Struktura <code>&lt;ul&gt;</code> a <code>&lt;li&gt;</code> pro odrážky.</li>
-            <li><strong>Média:</strong> Ke každé straně lze připojit neomezené množství souborů (JPG, PNG, MP3, WAV). Soubory se ukládají jako binární bloby přímo do IndexedDB.</li>
-            <li><strong>Prohození stran:</strong> U existující kartičky můžete přední a zadní stranu prohodit včetně připojených médií.</li>
+            <li><strong>Doprava:</strong> Dobré - odpověď jste zvládli.</li>
+            <li><strong>Doleva:</strong> Znovu - odpověď nevyšla a karta se má brzy vrátit.</li>
+            <li><strong>Nahoru:</strong> Snadné - odpověď naskočila okamžitě.</li>
+            <li><strong>Dolů:</strong> Těžké - odpověď byla správná nebo skoro správná, ale s váháním.</li>
+            <li><strong>Zpět na předchozí kartu:</strong> použijte malou šipku přímo na kartičce.</li>
+            <li><strong>Hvězdička při učení:</strong> hvězdičkou si kartu označíte bez opuštění průchodu.</li>
+          </ul>
+          <p className="muted">Tip: Snadné používejte střídmě. Pokud jste dlouho přemýšleli, je přesnější Dobré nebo Těžké.</p>
+        </section>
+
+        <section className="panel">
+          <h2>Režimy v procvičování</h2>
+          <ul>
+            <li><strong>Učení:</strong> klasická otočná kartička s hodnocením swipem.</li>
+            <li><strong>Test:</strong> rychlý výběr odpovědi z možností uvnitř procvičování.</li>
+            <li><strong>Psaní:</strong> odpověď píšete ručně. Tolerantní režim odpustí drobné překlepy, přísný režim vyžaduje přesnější shodu.</li>
+          </ul>
+          <p>Před spuštěním v balíčku můžete vybrat, jestli chcete všechny karty, dnešní opakování, nové karty, těžké karty nebo chyby. Můžete také omezit počet karet a pořadí.</p>
+        </section>
+
+        <section className="panel">
+          <h2>Match mód</h2>
+          <p>Match je samostatný režim mimo klasické procvičování. Na levé straně jsou pojmy nebo otázky, na pravé straně promíchané odpovědi. Vyberete jednu položku vlevo a potom odpověď vpravo.</p>
+          <ul>
+            <li><strong>Správná dvojice:</strong> obě položky zmizí ze hry a plocha se postupně čistí.</li>
+            <li><strong>Špatná dvojice:</strong> položky krátce signalizují chybu a zůstávají ve hře.</li>
+            <li><strong>Výsledek:</strong> po dokončení uvidíte skóre a přehled chybných pokusů.</li>
+          </ul>
+          <p className="muted">Tip: Match je dobrý pro pojmy, slovíčka, definice a dvojice typu stát - hlavní město.</p>
+        </section>
+
+        <section className="panel">
+          <h2>Test mód</h2>
+          <p>Test je samostatný režim určený pro kontrolu znalostí. Před spuštěním si nastavíte počet otázek, směr dotazování, typ odpovědí a zda chcete průběžné vyhodnocení nebo výsledky až na konci.</p>
+          <ul>
+            <li><strong>Přední → zadní:</strong> vidíte otázku nebo pojem a odpovídáte zadní stranou.</li>
+            <li><strong>Zadní → přední:</strong> vidíte odpověď nebo definici a hledáte původní pojem.</li>
+            <li><strong>Výběr z možností:</strong> aplikace vytvoří distraktory z ostatních kartiček v balíčku.</li>
+            <li><strong>Pouze hvězdičkové:</strong> hodí se pro rychlou kontrolu důležitých nebo problémových karet.</li>
+            <li><strong>Výsledky:</strong> na konci uvidíte skóre, procenta, správné a špatné odpovědi a možnost test zopakovat.</li>
           </ul>
         </section>
 
         <section className="panel">
-          <h2>Importy z externích zdrojů</h2>
-          <p>Pro hromadné nahrávání dat zvolte odpovídající formát v záložce Import:</p>
+          <h2>Study game: Rychlá odpověď</h2>
+          <p>Rychlá odpověď je jednoduchá hra na čas. Aplikace ukáže zadání a vy vybíráte správnou odpověď z možností. Cílem je odpovídat přesně a rychle, protože skóre vychází ze správných odpovědí a tempa.</p>
+          <p className="muted">Tip: Používejte ji jako rozehřátí nebo krátkou kontrolu před testem. Pro hlubší učení je lepší klasické procvičování swipem.</p>
+        </section>
+
+        <section className="panel">
+          <h2>Export a import</h2>
+          <p>Protože jsou data uložená lokálně v prohlížeči, záloha je zásadní. Nejbezpečnější běžný postup je pravidelně stáhnout ZIP zálohu a uložit ji mimo prohlížeč, například do souborů, iCloudu, OneDrivu nebo na disk.</p>
           <ul>
-            <li><strong>Anki ZIP:</strong> Očekává .zip archiv obsahující jedno .xml se strukturou karet a složku <code>blobs/</code> s mediálními soubory pojmenovanými podle hashů v XML.</li>
-            <li><strong>CSV:</strong> Textový soubor s oddělovačem (čárka/středník). V průvodci namapujte sloupce pro přední stranu, zadní stranu a tagy.</li>
-            <li><strong>Markdown:</strong> Importuje strukturované soubory, kde nadpisy <code>##</code> definují novou kartu.</li>
-            <li><strong>Hromadný editor:</strong> Pro rychlé ruční zadání většího množství karet použijte hromadné vytváření přímo v balíčku.</li>
+            <li><strong>ZIP záloha:</strong> doporučená a lepší varianta pro kompletní zálohu celé sady. Je vhodnější pro běžné uživatele, protože obsahuje databázový <code>backup.json</code>, související data a případné přílohy jako samostatné soubory.</li>
+            <li><strong>JSON export:</strong> původní/starší forma exportu. Zůstává dostupná jako jednodušší nebo pokročilejší technická varianta v jednom souboru, ale pro kompletní zálohu celé aplikace používejte raději ZIP.</li>
+            <li><strong>CSV:</strong> hodí se pro tabulky a jednoduchý přenos textových kartiček.</li>
+            <li><strong>Markdown:</strong> je užitečný pro strukturované poznámky.</li>
+            <li><strong>Anki ZIP:</strong> slouží pro import balíčku z Anki včetně mediálních souborů, pokud jsou v exportu dostupné.</li>
           </ul>
         </section>
 
         <section className="panel">
-          <h2>Procvičování</h2>
-          <p>Procvičování můžete spustit z balíčku nebo z úvodní stránky pro více sad najednou. V balíčku si vyberete zdroj karet, počet karet v průchodu a pořadí.</p>
-          <ul>
-            <li><strong>K opakování dnes:</strong> Karty, kterým už nastal čas podle plánování.</li>
-            <li><strong>Všechny kartičky:</strong> Celý balíček bez ohledu na datum dalšího opakování.</li>
-            <li><strong>Těžké kartičky:</strong> Karty s chybami nebo nízkou snadností.</li>
-            <li><strong>Špatně zodpovězené:</strong> Karty, které měly v historii odpověď Znovu nebo Těžké.</li>
-            <li><strong>Nové kartičky:</strong> Karty, které ještě nebyly procvičované.</li>
-          </ul>
+          <h2>Dark mode</h2>
+          <p>Tmavý režim zapnete v Nastavení. Preference se ukládá lokálně, takže aplikace si ji zapamatuje i po zavření. Tmavý režim je určený hlavně pro večerní učení, menší únavu očí a lepší čitelnost v tmavém prostředí.</p>
         </section>
 
         <section className="panel">
-          <h2>Režimy procvičování</h2>
-          <ul>
-            <li><strong>Učení:</strong> Kartu otočíte klepnutím. Potom zvolíte hodnocení nebo použijete gesto: doleva Znovu, doprava Dobré, nahoru Snadné, dolů Těžké.</li>
-            <li><strong>Test:</strong> Aplikace nabídne správnou odpověď a distraktory z ostatních karet v balíčku. Přeskočení se zapíše jako Znovu.</li>
-            <li><strong>Psaní:</strong> Napíšete odpověď ručně. Tolerantní režim odpustí drobné překlepy pomocí podobnosti textu, striktní režim vyžaduje přesnější shodu.</li>
-          </ul>
+          <h2>OneDrive</h2>
+          <p>OneDrive je experimentální funkce pro doplňkové cloudové zálohování. Může pomoct, ale nemusí být plně stabilní ani vhodná jako jediná kopie dat. Pro jistou obnovu používejte pravidelně ZIP zálohu.</p>
         </section>
 
         <section className="panel">
-          <h2>Snadnost a plánování</h2>
-          <p>Aplikace používá SRS (Spaced Repetition System) založený na intervalu, počtu opakování, chybách a faktoru snadnosti.</p>
+          <h2>Snadnost a obtížnost</h2>
+          <p>Snadnost je interní hodnota, která ovlivňuje, jak rychle se kartě prodlužuje interval mezi opakováními. Nová kartička začíná na běžné hodnotě a podle vašich gest se postupně mění.</p>
           <ul>
-            <li><strong>Snadnost:</strong> Číslo u kartičky říká, jak rychle se prodlužuje interval mezi opakováními. Nová karta začíná na hodnotě 2.50. Vyšší hodnota znamená, že se po správné odpovědi objeví později; nižší hodnota ji drží častěji v procvičování.</li>
-            <li><strong>Znovu:</strong> Resetuje interval, přidá chybu, sníží snadnost o 0.20 a naplánuje kartu přibližně za 10 minut.</li>
-            <li><strong>Těžké:</strong> Nechá kartu v kratším intervalu, sníží snadnost o 0.15 a započítá opakování.</li>
-            <li><strong>Dobré:</strong> Posune kartu podle aktuálního intervalu a snadnosti. První správná odpověď nastaví interval 1 den, druhá 3 dny, další se násobí snadností.</li>
-            <li><strong>Snadné:</strong> Výrazněji prodlouží interval, zvýší snadnost o 0.15 a u nové karty nastaví první interval na 4 dny.</li>
-            <li><strong>Minimum snadnosti:</strong> Hodnota neklesne pod 1.30, aby se karta dala dál rozumně plánovat.</li>
+            <li><strong>Znovu:</strong> karta se vrátí brzy, započítá se chyba a snadnost klesne.</li>
+            <li><strong>Těžké:</strong> interval zůstane kratší, protože odpověď nebyla jistá.</li>
+            <li><strong>Dobré:</strong> karta se posune podle aktuálního plánu.</li>
+            <li><strong>Snadné:</strong> interval se prodlouží výrazněji a snadnost stoupne.</li>
           </ul>
+          <p>V hlavním procvičování tyto volby nevybíráte tlačítky pod kartičkou, ale swipem: doleva Znovu, dolů Těžké, doprava Dobré, nahoru Snadné.</p>
         </section>
 
         <section className="panel">
-          <h2>Správa úložiště a zálohy</h2>
-          <p>Všechna data jsou uložena lokálně v prohlížeči (IndexedDB). Prohlížeč může data smazat při nedostatku místa na disku.</p>
+          <h2>Mobilní ovládání</h2>
           <ul>
-            <li><strong>JSON Export:</strong> Jediný způsob kompletní zálohy. Obsahuje kompletní dump databáze včetně médií v Base64 kódování.</li>
-            <li><strong>Export balíčku:</strong> Hodí se pro sdílení nebo přenos jedné sady kartiček.</li>
-            <li><strong>CSV Export:</strong> Praktický pro kontrolu a další zpracování textových karet mimo aplikaci.</li>
-            <li><strong>Údržba:</strong> Funkce "Smazat nepřiřazená média" v nastavení odstraní soubory, jejichž mateřské karty byly smazány.</li>
-            <li><strong>Interval:</strong> Připomínač zálohy v nastavení určuje frekvenci výzvy k exportu (výchozí 7 dní).</li>
-          </ul>
-        </section>
-
-        <section className="panel">
-          <h2>Když se něco chová zvláštně</h2>
-          <ul>
-            <li><strong>Nevidíte kartu k opakování:</strong> Zkontrolujte volbu zdroje karet. Režim K opakování dnes ukáže jen karty s nastalým termínem.</li>
-            <li><strong>Karta se vrací moc často:</strong> Pravděpodobně má nízkou snadnost nebo více chyb. Pomůže ji přeformulovat na menší a jasnější otázku.</li>
-            <li><strong>Potřebujete začít znovu:</strong> Vytvořte kopii balíčku. Kopie zachová obsah, ale resetuje historii procvičování.</li>
-            <li><strong>Měníte prohlížeč nebo zařízení:</strong> Nejprve exportujte JSON zálohu a na novém místě ji importujte.</li>
+            <li><strong>Menu:</strong> otevřete tlačítkem nebo tahem od levého okraje. Otevřené menu zavřete tahem doleva.</li>
+            <li><strong>Návrat:</strong> na podstránkách používejte decentní šipku zpět nebo swipe gesto z levé části obrazovky.</li>
+            <li><strong>Krátké průchody:</strong> na telefonu bývá nejlepší učit se v dávkách 10-20 karet.</li>
+            <li><strong>Malé displeje:</strong> procvičování je záměrně čisté, bez spodních hodnoticích tlačítek, aby zůstalo místo pro samotnou kartu.</li>
           </ul>
         </section>
       </div>

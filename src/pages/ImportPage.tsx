@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import JSZip from 'jszip';
 import { createCardInput, createDeckInput, db, addMediaToCard } from '../db/database';
-import { downloadBackup, downloadBackupZip, formatImportSummary, importBackupFile, shareBackup, type ImportMode } from '../services/exportImport';
+import { downloadBackup, downloadBackupZip, formatImportSummary, importBackupFile, type ImportMode } from '../services/exportImport';
 import { previewCsvCards, parseCsvCards } from '../services/importers/csvImporter';
 import { previewMarkdownCards } from '../services/importers/markdownImporter';
-import { importAnkiXml } from '../services/importers/ankiImporter';
-import type { Deck, ImportPreview, PendingCardMedia, Card } from '../types';
+import { parseAnkiXml, previewAnkiXml } from '../services/importers/ankiImporter';
+import { processImportedMedia } from '../services/mediaProcessing';
+import type { Deck, ImportPreview } from '../types';
 import { nowIso } from '../utils/date';
 import { t } from '../i18n';
 
@@ -29,8 +30,10 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
   const [csvFileName, setCsvFileName] = useState('');
   const [csvMapping, setCsvMapping] = useState({ front: 'front', back: 'back', tags: 'tags', image: 'image' });
   const [markdownText, setMarkdownText] = useState('');
-  const [ankiData, setAnkiData] = useState<{ card: Card, media: PendingCardMedia[] }[]>([]);
+  const [ankiFile, setAnkiFile] = useState<File>();
+  const [ankiCardCount, setAnkiCardCount] = useState(0);
   const [zipFileName, setZipFileName] = useState('');
+  const [ankiStatus, setAnkiStatus] = useState<string>();
 
   useEffect(() => {
     loadDecks();
@@ -81,25 +84,12 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
     }
   }
 
-  async function handleShareBackup() {
-    setError(undefined);
-    setMessage(undefined);
-    try {
-      const result = await shareBackup();
-      setMessage(result === 'shared'
-        ? 'Sdílení JSON zálohy bylo otevřeno.'
-        : 'Sdílení není v tomto prohlížeči dostupné, záloha byla stažena jako soubor.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.common.error);
-    }
-  }
-
   async function handleDownloadZipBackup() {
     setError(undefined);
     setMessage(undefined);
     try {
       await downloadBackupZip();
-      setMessage('ZIP záloha byla vytvořena. Obsahuje backup.json a média jako samostatné soubory.');
+      setMessage('ZIP záloha byla vytvořena. Je vhodná pro kompletní obnovu včetně médií.');
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     }
@@ -151,58 +141,94 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
   async function handleAnkiPreview(file?: File) {
     if (!file) return;
     setError(undefined);
-    setZipFileName(file.name.replace('.zip', ''));
+    setMessage(undefined);
+    setAnkiFile(undefined);
+    setAnkiCardCount(0);
+    setZipFileName(file.name.replace(/\.zip$/i, ''));
+    setAnkiStatus('Načítám ZIP z Anki…');
     try {
       const zip = await JSZip.loadAsync(file);
       const xmlFile = Object.values(zip.files).find((f) => f.name.endsWith('.xml'));
       if (!xmlFile) throw new Error('Nebylo nalezeno žádné XML v ZIPu.');
+      setAnkiStatus('Čtu seznam kartiček…');
       const xmlText = await xmlFile.async('string');
-      
-      const blobs = new Map<string, Blob>();
-      const blobFolder = zip.folder('blobs');
-      if (blobFolder) {
-        for (const [name, file] of Object.entries(blobFolder.files)) {
-          if (!file.dir) {
-            blobs.set(name.replace('blobs/', ''), await file.async('blob'));
-          }
-        }
-      }
-
-      const result = await importAnkiXml(xmlText, blobs);
-      setAnkiData(result.cards);
-      setMessage(`Načteno ${result.cards.length} karet z Anki.`);
+      const preview = previewAnkiXml(xmlText);
+      setAnkiFile(file);
+      setAnkiCardCount(preview.cardCount);
+      if (preview.deckName) setZipFileName(preview.deckName);
+      setMessage(`Připraveno ${preview.cardCount} karet z Anki. Média se na mobilu načtou a uloží postupně až při importu.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
+    } finally {
+      setAnkiStatus(undefined);
     }
   }
 
   async function executeAnkiImport(createNewDeck: boolean) {
+    if (!ankiFile) return;
+    setError(undefined);
+    setMessage(undefined);
+    setAnkiStatus('Otevírám Anki ZIP…');
     try {
       let deckId = targetDeckId;
+      let createdDeckId: string | undefined;
       if (createNewDeck) {
         const deck = createDeckInput(zipFileName, 'Importováno z Anki');
         await db.decks.add(deck);
         deckId = deck.id;
+        createdDeckId = deck.id;
         await loadDecks();
-        if (onDeckCreated) onDeckCreated(deckId);
       }
       
       if (!deckId) throw new Error('Vyberte balíček nebo vytvořte nový.');
+
+      const zip = await JSZip.loadAsync(ankiFile);
+      const xmlFile = Object.values(zip.files).find((f) => f.name.endsWith('.xml'));
+      if (!xmlFile) throw new Error('Nebylo nalezeno žádné XML v ZIPu.');
+      setAnkiStatus('Čtu seznam kartiček…');
+      const parsedCards = parseAnkiXml(await xmlFile.async('string'));
+      let importedCards = 0;
+      let importedMedia = 0;
       
-      for (const entry of ankiData) {
-        const newCard = { ...entry.card, deckId: deckId };
+      for (let index = 0; index < parsedCards.length; index++) {
+        const entry = parsedCards[index];
+        setAnkiStatus(`Ukládám kartičky z Anki (${index + 1}/${parsedCards.length})…`);
+        const newCard = { ...entry.card, deckId };
         const id = await db.cards.add(newCard);
-        for (const media of entry.media) {
-             await addMediaToCard({ ...media, cardId: id, deckId: deckId });
+
+        for (let mediaIndex = 0; mediaIndex < entry.mediaRefs.length; mediaIndex++) {
+          const mediaRef = entry.mediaRefs[mediaIndex];
+          setAnkiStatus(`Ukládám média z Anki (${index + 1}/${parsedCards.length}, soubor ${mediaIndex + 1}/${entry.mediaRefs.length})…`);
+          const zipEntry = zip.file(`blobs/${mediaRef.hash}`) ?? zip.file(mediaRef.hash);
+          if (!zipEntry) continue;
+          const blob = await zipEntry.async('blob');
+          const media = await processImportedMedia(blob, mediaRef.side, {
+            mimeType: mediaRef.mimeType,
+            name: mediaRef.name,
+            compressAudio: mediaRef.compressAudio,
+            readAudioDuration: mediaRef.readAudioDuration
+          });
+          await addMediaToCard({ ...media, cardId: id, deckId });
+          importedMedia += 1;
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
+        }
+
+        importedCards += 1;
+        if (index % 3 === 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
         }
       }
       
       await db.decks.update(deckId, { updatedAt: nowIso() });
-      setMessage(`Importováno ${ankiData.length} karet.`);
-      setAnkiData([]);
+      setMessage(`Importováno ${importedCards} karet z Anki a ${importedMedia} médií.`);
+      setAnkiFile(undefined);
+      setAnkiCardCount(0);
       onChanged();
+      if (createdDeckId && onDeckCreated) onDeckCreated(createdDeckId);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
+    } finally {
+      setAnkiStatus(undefined);
     }
   }
 
@@ -223,6 +249,7 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
       </div>
 
       {message && <p className="success-box">{message}</p>}
+      {ankiStatus && <p className="success-box" role="status">{ankiStatus}</p>}
       {error && <p className="error-box">{error}</p>}
 
       {tab !== 'json' && (
@@ -237,12 +264,11 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
 
       {tab === 'json' && (
         <section className="panel stack">
-          <h2>Záloha a import JSON</h2>
-          <p>Import přijímá starší JSON zálohy i nové ZIP zálohy automaticky. JSON obsahuje média jako base64, ZIP ukládá backup.json a média jako samostatné soubory.</p>
-          <div className="button-row">
-            <button className="primary-button" type="button" onClick={downloadBackup}>Exportovat JSON</button>
-            <button className="secondary-button" type="button" onClick={handleShareBackup}>Sdílet JSON</button>
-            <button className="secondary-button" type="button" onClick={handleDownloadZipBackup}>Exportovat ZIP</button>
+          <h2>Záloha a import</h2>
+          <p>ZIP je doporučená kompletní záloha: ukládá backup.json a média jako samostatné soubory, takže je vhodnější pro obnovu celého balíku dat. JSON zůstává jako doplňková pokročilá varianta.</p>
+          <div className="button-row export-priority-row">
+            <button className="primary-button" type="button" onClick={handleDownloadZipBackup}>Exportovat ZIP zálohu</button>
+            <button className="secondary-button" type="button" onClick={downloadBackup}>Exportovat JSON</button>
           </div>
 
           <JsonImportAction
@@ -321,17 +347,28 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
           <p>{'Nahrajte ZIP balíček z Anki (obsahující .xml a složku blobs).'}</p>
           <label className="upload-button wide">
             {'Vybrat ZIP'}
-            <input type="file" accept=".zip" onChange={(event) => handleAnkiPreview(event.target.files?.[0])} />
+            <input
+              type="file"
+              accept=".zip"
+              disabled={Boolean(ankiStatus)}
+              onChange={(event) => {
+                handleAnkiPreview(event.target.files?.[0]);
+                event.currentTarget.value = '';
+              }}
+            />
           </label>
+          <p className="muted">
+            U větších audio balíčků se média ukládají postupně po kartách, aby import prošel i na iPhonu s menší dostupnou pamětí.
+          </p>
           
-          {ankiData.length > 0 && (
+          {ankiFile && ankiCardCount > 0 && (
              <div className="button-row" style={{ marginTop: '1rem' }}>
-               <button className="primary-button" onClick={() => executeAnkiImport(true)}>
+               <button className="primary-button" disabled={Boolean(ankiStatus)} onClick={() => executeAnkiImport(true)}>
                  {'Vytvořit balíček ' + zipFileName}
                </button>
                {decks.length > 0 && (
-                 <button className="secondary-button" onClick={() => executeAnkiImport(false)}>
-                   {'Přidat do existujícího balíčku'}
+                 <button className="secondary-button" disabled={Boolean(ankiStatus)} onClick={() => executeAnkiImport(false)}>
+                   {`Přidat ${ankiCardCount} karet do existujícího balíčku`}
                  </button>
                )}
              </div>

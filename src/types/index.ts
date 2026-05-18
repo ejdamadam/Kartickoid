@@ -30,6 +30,7 @@ export interface Card {
   ease: number;
   repetitions: number;
   lapses: number;
+  starred?: boolean;
 }
 
 export type MediaType = 'image' | 'audio';

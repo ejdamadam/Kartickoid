@@ -9,6 +9,7 @@ export interface Theme {
 }
 
 export type TextSize = 'small' | 'default' | 'large' | 'xlarge';
+export type ColorMode = 'light' | 'dark';
 
 export interface CustomBackground {
   dataUrl: string;
@@ -21,6 +22,8 @@ interface ThemeContextType {
   setTheme: (theme: Theme) => void;
   textSize: TextSize;
   setTextSize: (size: TextSize) => void;
+  colorMode: ColorMode;
+  setColorMode: (mode: ColorMode) => void;
   customBackground: CustomBackground | null;
   setCustomBackground: (background: CustomBackground) => Promise<void>;
   clearCustomBackground: () => Promise<void>;
@@ -42,6 +45,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return saved ? safeJsonParse(saved, defaultTheme) : defaultTheme;
   });
   const [textSize, setTextSizeState] = useState<TextSize>(() => readSavedTextSize());
+  const [colorMode, setColorModeState] = useState<ColorMode>(() => readSavedColorMode());
   const [customBackground, setCustomBackgroundState] = useState<CustomBackground | null>(null);
 
   const setTheme = (newTheme: Theme) => {
@@ -53,6 +57,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('app-text-size', size);
     setTextSizeState(size);
     void db.appMeta.put({ key: 'textSize', value: size, updatedAt: nowIso() });
+  };
+
+  const setColorMode = (mode: ColorMode) => {
+    localStorage.setItem('app-color-mode', mode);
+    setColorModeState(mode);
+    void db.appMeta.put({ key: 'colorMode', value: mode, updatedAt: nowIso() });
   };
 
   const setCustomBackground = async (background: CustomBackground) => {
@@ -68,14 +78,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let active = true;
     async function loadSettings() {
-      const [storedTextSize, storedBackground] = await Promise.all([
+      const [storedTextSize, storedColorMode, storedBackground] = await Promise.all([
         db.appMeta.get('textSize'),
+        db.appMeta.get('colorMode'),
         db.appMeta.get('customBackground')
       ]);
       if (!active) return;
       if (isTextSize(storedTextSize?.value)) {
         setTextSizeState(storedTextSize.value);
         localStorage.setItem('app-text-size', storedTextSize.value);
+      }
+      if (isColorMode(storedColorMode?.value)) {
+        setColorModeState(storedColorMode.value);
+        localStorage.setItem('app-color-mode', storedColorMode.value);
       }
       if (isCustomBackground(storedBackground?.value)) {
         setCustomBackgroundState(storedBackground.value);
@@ -96,15 +111,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       return `${r}, ${g}, ${b}`;
     };
 
-    document.documentElement.style.setProperty('--primary-color', theme.primary);
-    document.documentElement.style.setProperty('--primary-rgb', hexToRgb(theme.primary));
-    document.documentElement.style.setProperty('--bg-color', theme.bg);
-    document.documentElement.style.setProperty('--bg-rgb', hexToRgb(theme.bg));
-  }, [theme]);
+    const palette = colorMode === 'dark'
+      ? { primary: '#e8eef8', bg: '#0f172a' }
+      : { primary: theme.primary, bg: theme.bg };
+    document.documentElement.style.setProperty('--primary-color', palette.primary);
+    document.documentElement.style.setProperty('--primary-rgb', hexToRgb(palette.primary));
+    document.documentElement.style.setProperty('--bg-color', palette.bg);
+    document.documentElement.style.setProperty('--bg-rgb', hexToRgb(palette.bg));
+  }, [theme, colorMode]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--app-font-size', textSizePixels[textSize]);
   }, [textSize]);
+
+  useEffect(() => {
+    document.documentElement.dataset.colorMode = colorMode;
+  }, [colorMode]);
 
   useEffect(() => {
     if (customBackground) {
@@ -122,7 +144,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [customBackground]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, textSize, setTextSize, customBackground, setCustomBackground, clearCustomBackground }}>
+    <ThemeContext.Provider value={{ theme, setTheme, textSize, setTextSize, colorMode, setColorMode, customBackground, setCustomBackground, clearCustomBackground }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -147,8 +169,17 @@ function readSavedTextSize(): TextSize {
   return isTextSize(saved) ? saved : 'default';
 }
 
+function readSavedColorMode(): ColorMode {
+  const saved = localStorage.getItem('app-color-mode');
+  return isColorMode(saved) ? saved : 'light';
+}
+
 function isTextSize(value: unknown): value is TextSize {
   return value === 'small' || value === 'default' || value === 'large' || value === 'xlarge';
+}
+
+function isColorMode(value: unknown): value is ColorMode {
+  return value === 'light' || value === 'dark';
 }
 
 function isCustomBackground(value: unknown): value is CustomBackground {

@@ -101,23 +101,8 @@ export async function downloadBackupZip(): Promise<void> {
   await downloadBlobFile(entry.blob, entry.name);
 }
 
-export async function shareBackup(): Promise<'shared' | 'downloaded'> {
-  const backup = await exportDatabase();
-  const entry = await createBackupHistoryEntry(backup, 'share');
-  const blob = entry.blob;
-  const file = new File([blob], entry.name, { type: 'application/json' });
-
-  if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-    await navigator.share({
-      title: 'Kartičkoid JSON záloha',
-      text: 'JSON záloha aplikace Kartičkoid.',
-      files: [file]
-    });
-    return 'shared';
-  }
-
-  await downloadBlobFile(entry.blob, entry.name);
-  return 'downloaded';
+export async function createBackupZipFile(): Promise<{ blob: Blob; name: string }> {
+  return createBackupZipBlob();
 }
 
 export async function downloadDeckBackup(deckId: EntityId, deckName: string): Promise<void> {

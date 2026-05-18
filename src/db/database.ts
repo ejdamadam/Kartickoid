@@ -68,7 +68,8 @@ export function createCardInput(deckId: EntityId, frontText: string, backText: s
     intervalDays: 0,
     ease: 2.5,
     repetitions: 0,
-    lapses: 0
+    lapses: 0,
+    starred: false
   };
 }
 

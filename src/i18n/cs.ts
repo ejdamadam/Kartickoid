@@ -103,7 +103,7 @@ export const cs = {
     frontPlaceholder: 'Text otázky může zůstat prázdný, pokud přidáš obrázek.',
     backPlaceholder: 'Text odpovědi může zůstat prázdný, pokud přidáš obrázek.',
     contentRequired: 'Přidej alespoň text nebo jeden obrázek.',
-    compressing: 'Zpracovávám obrázky…',
+    compressing: 'Zpracovávám soubory…',
     dropFront: 'Přetáhni obrázky na přední stranu nebo klepni pro výběr.',
     dropBack: 'Přetáhni obrázky na zadní stranu nebo klepni pro výběr.',
     chooseImages: 'Vybrat obrázky',
@@ -214,7 +214,7 @@ export const cs = {
   },
   bulk: {
     quickInput: 'Rychlý zápis',
-    sample: 'ATP :: Energetická měna buňky :: biologie,buňka\nMitochondrie :: Elektrárna buňky :: biologie\nOsmóza :: Pohyb vody přes polopropustnou membránu :: biologie',
+    sample: 'ATP: Energetická měna buňky\nMitochondrie: Elektrárna buňky\nOsmóza: Pohyb vody přes polopropustnou membránu\nRibozom :: Místo tvorby bílkovin :: biologie,buňka',
     ready: (count: number) => `${count} připravených kartiček. Po vytvoření je můžeš smazat jednotlivě; pro větší experimenty doporučujeme nejdřív export zálohy.`,
     creating: 'Vytvářím…',
     create: (count: number) => `Vytvořit ${count}`

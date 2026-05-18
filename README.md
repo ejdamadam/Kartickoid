@@ -1,161 +1,141 @@
 # Kartičkoid
 
-Offline-first PWA aplikace pro procvičování studijních kartiček. Běží čistě v prohlížeči, bez backendu, přihlašování a cloudové synchronizace. Data zůstávají na zařízení v IndexedDB.
+Kartičkoid je offline-first PWA aplikace pro tvorbu, správu a procvičování studijních kartiček. Běží v prohlížeči bez backendu a bez přihlášení. Data se ukládají lokálně do IndexedDB v daném prohlížeči, proto je důležité pravidelně používat export zálohy.
 
-## Funkce
+## Hlavní funkce
 
-- čistá mobilní hlavní obrazovka se seznamem balíčků, rychlým pokračováním a vyhledáváním
-- hamburger menu pro import, export, statistiky, nastavení a nápovědu
-- balíčky kartiček s vytvořením, úpravou, duplikací a smazáním
-- kartičky s textem, chip tagy a více obrázky na přední nebo zadní straně
-- image-only kartičky: text otázky ani odpovědi není povinný, pokud karta obsahuje obrázek
-- obrázky přímo při vytváření kartičky, drag & drop, náhled, odebrání, přeřazení a zvětšený náhled
-- režim Učení: klepnutím otočíš kartu, tažením doprava = Dobré, doleva = Znovu, nahoru = Snadné, dolů = Těžké
-- režim Test: výběr odpovědi z možností s okamžitou zpětnou vazbou
-- režim Psaní: fuzzy porovnání odpovědi, přísný/tolerantní režim a zvýraznění rozdílů
-- vlastní studijní session, náhodný režim a opakování obtížných kartiček i po dokončení dne
-- jednoduché statistiky: dnes procvičeno, série, úspěšnost, týdenní aktivita, nejtěžší kartičky
-- JSON export/import celé lokální databáze včetně médií
-- JSON export konkrétního balíčku a CSV export balíčku
-- CSV import s náhledem a mapováním sloupců
-- Markdown import a hromadný editor `Otázka :: Odpověď :: tagy`
-- PWA manifest, Apple touch ikony, service worker a banner pro aktualizaci
+- balíčky kartiček s vytvořením, úpravou, duplikací a mazáním
+- kartičky s přední a zadní stranou, tagy, rich-text editorem a médii
+- procvičování swipem: doleva Znovu, doprava Dobré, nahoru Snadné, dolů Těžké
+- 3D flip kartičky v režimu procvičování
+- hvězdičky pro důležité kartičky a filtr všechny / označené / neoznačené
+- návrat na předchozí kartičku během učení
+- Match mód pro párování pojmů a odpovědí
+- samostatný Test mód s nastavením počtu otázek, směru dotazování, výsledků a hvězdičkových kartiček
+- Study game Rychlá odpověď se skóre a závěrečným vyhodnocením
+- hromadné přidání kartiček v jednom modalu:
+  - vizuální editor více kartiček
+  - raw text vstup ve formátu `pojem: vysvětlení`
+  - kompatibilní starší zápis `otázka :: odpověď :: tagy`
+- ZIP export/import jako doporučená varianta kompletní zálohy včetně souvisejících dat a příloh
+- JSON export/import jako původní/starší technická varianta
+- CSV a Markdown import
+- Anki ZIP import
+- dark mode s lokálně uloženou preferencí
+- experimentální OneDrive zálohování
+- PWA manifest, service worker a offline provoz po prvním načtení
 
-## Lokální spuštění
+## Instalace
 
 ```bash
 npm install
+```
+
+## Vývojové spuštění
+
+```bash
 npm run dev
 ```
 
-Vývojová verze poběží typicky na `http://localhost:5173`.
+Vývojová verze běží typicky na `http://localhost:5173/Kartickoid/`. Pokud je port obsazený, Vite automaticky použije další volný port.
 
-## Produkční build
+## Build
 
 ```bash
 npm run build
+```
+
+Build spouští TypeScript kontrolu (`tsc`) a produkční Vite build do složky `dist`.
+
+Pro lokální kontrolu produkčního buildu:
+
+```bash
 npm run preview
 ```
 
-Pro ověření PWA chování používejte produkční build přes `npm run preview`, protože service worker se generuje při buildu.
+## Lint a testy
 
-## Nasazení
+V projektu aktuálně nejsou definované samostatné npm skripty pro lint ani testy. Dostupná kontrola je:
 
-### Vercel
+```bash
+npm run build
+```
 
-- Framework preset: `Vite`
-- Build command: `npm run build`
-- Output directory: `dist`
+## Verzování
 
-### Netlify
+Verze aplikace je čtená z `package.json`. Vite ji při buildu předává do aplikace přes `__APP_VERSION__` a UI ji zobrazuje v menu / nastavení.
 
-- Build command: `npm run build`
-- Publish directory: `dist`
+Patch verzi navýšíte příkazem:
 
-### Cloudflare Pages
+```bash
+npm run version:patch
+```
 
-- Build command: `npm run build`
-- Output directory: `dist`
-- Node version: aktuální LTS nebo novější
+Skript aktualizuje `package.json` i `package-lock.json`, takže číslo verze zůstává v jednom zdroji pravdy pro aplikaci i balíčkovací metadata.
 
-### GitHub Pages
+## Deploy
 
-1. Spusťte `npm run build`.
-2. Publikujte obsah složky `dist`.
-3. Pokud aplikace neběží z kořene domény, nastavte ve `vite.config.ts` vlastnost `base` na cestu repozitáře, například `base: '/nazev-repa/'`.
+Projekt je nastavený pro GitHub Pages:
 
-## Jak testovat na iPhone
+- `homepage` v `package.json`: `https://ejdamadam.github.io/Kartickoid/`
+- `vite.config.ts`: `base: '/Kartickoid/'`
+- deploy script: `npm run deploy`
 
-1. Spusťte `npm run build`.
-2. Nasaďte složku `dist` na Vercel, Netlify nebo Cloudflare Pages.
-3. Otevřete nasazenou URL v Safari na iPhonu.
-4. Klepněte na sdílecí tlačítko.
-5. Vyberte `Přidat na plochu`.
-6. Spusťte Kartičkoid ikonou z plochy jako samostatnou PWA aplikaci.
+Deploy probíhá přes balíček `gh-pages`:
 
-Po prvním úspěšném načtení základní aplikace funguje offline. Data jsou uložená v Safari IndexedDB pro danou doménu.
+```bash
+npm run deploy
+```
 
-## Řešení potíží na iOS PWA
-
-- Pokud se aplikace neinstaluje, ověřte, že běží přes HTTPS a má dostupný `manifest.webmanifest`.
-- Pokud se změny neprojeví, otevřete aplikaci v Safari, počkejte na aktualizační banner, případně odstraňte aplikaci z plochy a přidejte ji znovu.
-- Pokud zmizí lokální data, pravděpodobně je Safari odstranilo kvůli místu nebo dlouhé neaktivitě. Pro důležitá data používejte JSON export zálohy.
-- Kamera a galerie závisí na oprávněních Safari a konkrétní verzi iOS.
-
-## Známá omezení Safari PWA
-
-- iOS může při nedostatku místa odstranit IndexedDB data.
-- Periodické úlohy na pozadí a spolehlivá synchronizace nejsou pro tento typ aplikace dostupné.
-- Service worker se aktualizuje podle pravidel Safari, ne vždy okamžitě.
-- PWA je potřeba přidat na plochu ze Safari, jiné iOS prohlížeče používají stejný WebKit základ.
+Skript nejdřív spustí `predeploy`, tedy `npm run build`, a potom publikuje složku `dist` na GitHub Pages.
 
 ## Export a import zálohy
 
-Aktuální JSON formát:
+### Doporučené: ZIP
 
-```json
-{
-  "version": 2,
-  "schemaName": "kartickoid-backup",
-  "source": "kartickoid",
-  "exportedAt": "...",
-  "decks": [],
-  "cards": [],
-  "media": [],
-  "reviewLogs": [],
-  "appMeta": []
-}
+ZIP je hlavní doporučená varianta pro běžné zálohování a obnovu. Je vhodnější pro kompletní zálohu celé sady, protože drží databázový `backup.json`, související data a případné přílohy v jednom archivu.
+
+ZIP používejte hlavně:
+
+- před větším importem nebo úpravami
+- před mazáním balíčků
+- při přesunu na nové zařízení
+- jako pravidelnou bezpečnostní zálohu
+
+### Původní/starší: JSON
+
+JSON export je původní/starší forma exportu v jednom souboru. Zůstává dostupná jako jednodušší nebo pokročilejší technická varianta, ale pro kompletní běžnou zálohu je vhodnější ZIP.
+
+## Raw import kartiček
+
+Nejjednodušší zápis:
+
+```txt
+ATP: Energetická měna buňky
+Mitochondrie: Elektrárna buňky
+Osmóza: Pohyb vody přes polopropustnou membránu
 ```
 
-Obrázky se exportují jako base64 data URL. Import přijme verzi 1 i 2, přidává data do existující databáze a při kolizi ID automaticky přemapuje vztahy.
-
-## CSV
-
-CSV průvodce podporuje:
-
-```csv
-front,back,tags,image
-"Co je ATP?","Energetická měna buňky.","biologie,biochemie","mitochondrie.png"
-```
-
-Pole `image` je připravené pro kompatibilitu s externími nástroji. Přímé připojení souborů podle názvu je oddělené pro další rozšíření.
-
-## Markdown
-
-```md
-# Balíček: Biologie
-
-## Karta
-Přední:
-Co je ATP?
-
-Zadní:
-Energetická měna buňky.
-
-Tagy:
-biologie,biochemie
-
-Obrázek:
-mitochondrie.png
-```
-
-## Hromadný editor
+Starší zápis s tagy je stále podporovaný:
 
 ```txt
 ATP :: Energetická měna buňky :: biologie,buňka
 Mitochondrie :: Elektrárna buňky :: biologie
 ```
 
-Editor ukáže živý náhled, validaci a vytvoří více kartiček najednou.
+Každá dvojice patří na samostatný řádek.
 
-## Ukázková data
+## Soukromí a lokální data
 
-Ukázkový balíček je v `public/seed/biology-sample.json`. Importujte ho přes `Import -> JSON`.
+Aplikace nepoužívá vlastní vzdálené API. Kartičky, obrázky, zvuky, nastavení i historie procvičování zůstávají lokálně v prohlížeči. Pro důležitá data používejte ZIP export, protože prohlížeče mohou lokální úložiště při nedostatku místa nebo dlouhé neaktivitě vyčistit.
 
-## Migrace
+## iOS PWA poznámky
 
-Poznámky k databázovým migracím jsou v `MIGRATIONS.md`.
+- Instalace na plochu funguje přes Safari a sdílecí volbu Přidat na plochu.
+- PWA a service worker vyžadují HTTPS na produkční doméně.
+- Pokud se změny po deployi neprojeví, otevřete aplikaci v Safari a počkejte na aktualizaci service workeru, případně aplikaci z plochy odeberte a přidejte znovu.
+- IndexedDB data jsou vázaná na konkrétní doménu a prohlížeč.
 
-## Soukromí
+## Ukázková data a migrace
 
-Aplikace nepoužívá žádné vzdálené API. Kartičky, obrázky i logy zůstávají lokálně v prohlížeči na zařízení.
+Ukázkový balíček je v `public/seed/biology-sample.json`. Poznámky k databázovým migracím jsou v `MIGRATIONS.md`.
