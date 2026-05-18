@@ -28,10 +28,12 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [wrongPairs, setWrongPairs] = useState<MatchAttempt[]>([]);
   const [wrongFlashIds, setWrongFlashIds] = useState<string[]>([]);
+  const [correctFlashIds, setCorrectFlashIds] = useState<string[]>([]);
   const [roundKey, setRoundKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const wrongTimer = useRef<number | undefined>(undefined);
+  const correctTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     let active = true;
@@ -47,6 +49,7 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
       setMatchedCardIds([]);
       setWrongPairs([]);
       setWrongFlashIds([]);
+      setCorrectFlashIds([]);
       setLoading(false);
     }).catch((err) => {
       if (!active) return;
@@ -59,7 +62,10 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
     };
   }, [deckId, roundKey]);
 
-  useEffect(() => () => window.clearTimeout(wrongTimer.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(wrongTimer.current);
+    window.clearTimeout(correctTimer.current);
+  }, []);
 
   const matchItems = useMemo<MatchItem[]>(() => shuffle(cards.flatMap((card) => [
     { id: `${card.id}:front`, cardId: card.id, side: 'front' as const, content: card.frontText },
@@ -72,7 +78,7 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
   const correctCount = matchedCardIds.length;
 
   function chooseItem(item: MatchItem) {
-    if (matchedCardIdSet.has(item.cardId) || finished || wrongFlashIds.length > 0) return;
+    if (matchedCardIdSet.has(item.cardId) || finished || wrongFlashIds.length > 0 || correctFlashIds.length > 0) return;
     if (selectedIds.includes(item.id)) {
       setSelectedIds((current) => current.filter((id) => id !== item.id));
       return;
@@ -90,8 +96,14 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
     }
 
     if (first.cardId === item.cardId && first.side !== item.side) {
-      setMatchedCardIds((current) => [...current, item.cardId]);
-      setSelectedIds([]);
+      setCorrectFlashIds([first.id, item.id]);
+      setSelectedIds([first.id, item.id]);
+      window.clearTimeout(correctTimer.current);
+      correctTimer.current = window.setTimeout(() => {
+        setMatchedCardIds((current) => [...current, item.cardId]);
+        setCorrectFlashIds([]);
+        setSelectedIds([]);
+      }, 380);
       return;
     }
 
@@ -130,12 +142,13 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
           <div className="match-play-area" aria-label="Zamíchané kartičky pro hledání dvojic">
             {activeItems.map((item) => {
               const wrong = wrongFlashIds.includes(item.id);
+              const correct = correctFlashIds.includes(item.id);
               return (
                 <button
-                  className={`match-item ${selectedIds.includes(item.id) ? 'selected' : ''} ${wrong ? 'wrong shake' : ''}`}
+                  className={`match-item ${selectedIds.includes(item.id) ? 'selected' : ''} ${correct ? 'correct' : ''} ${wrong ? 'wrong shake' : ''}`}
                   type="button"
                   key={item.id}
-                  disabled={wrongFlashIds.length > 0}
+                  disabled={wrongFlashIds.length > 0 || correctFlashIds.length > 0}
                   onClick={() => chooseItem(item)}
                 >
                   <RichTextDisplay content={item.content} />

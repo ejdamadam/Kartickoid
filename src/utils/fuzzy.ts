@@ -8,7 +8,7 @@ export interface FuzzyResult {
 }
 
 export function normalizeAnswer(value: string, ignoreDiacritics = true): string {
-  const collapsed = value.trim().toLowerCase().replace(/\s+/g, ' ');
+  const collapsed = richTextToPlainText(value).trim().toLowerCase().replace(/\s+/g, ' ');
   if (!ignoreDiacritics) return collapsed;
   return collapsed.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
@@ -69,4 +69,21 @@ function buildWordDiff(expected: string, actual: string): FuzzyResult['diff'] {
   }
 
   return diff;
+}
+
+function richTextToPlainText(value: string): string {
+  if (!value) return '';
+  const withBreaks = value
+    .replace(/<\s*br\s*\/?>/gi, ' ')
+    .replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, ' ');
+  const withoutTags = withBreaks.replace(/<[^>]*>/g, ' ');
+  return withoutTags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 }

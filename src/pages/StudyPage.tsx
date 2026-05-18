@@ -317,8 +317,8 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
     if (isDismissing) return;
     setIsDismissing(true);
     await Promise.all([
-      animate(x, target.x, { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }).finished,
-      animate(y, target.y, { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }).finished
+      animate(x, target.x, { duration: 0.18, ease: [0.2, 0, 0.2, 1] }).finished,
+      animate(y, target.y, { duration: 0.18, ease: [0.2, 0, 0.2, 1] }).finished
     ]);
     onRate(rating);
   }
@@ -370,42 +370,48 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
         <motion.div className="swipe-indicator easy" style={{ opacity: easyOpacity }}>{t.study.easy}</motion.div>
         <motion.div className="swipe-indicator hard" style={{ opacity: hardOpacity }}>{t.study.hard}</motion.div>
 
-        <motion.div
-          className={`swipe-card ${revealed ? 'is-revealed' : ''}`}
-          animate={{ rotateY: revealed ? 180 : 0 }}
-          transition={{ duration: 0.46, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <div className="flip-card-face flip-card-front">
-            <CardToolbar
-              starred={card.starred === true}
-              canGoPrevious={canGoPrevious}
-              onPrevious={onPrevious}
-              onToggleStarred={onToggleStarred}
-            />
-            <div className="review-side centered">
-              <p className="side-label">{t.deck.frontSide}</p>
-              <div className="review-scroll" ref={frontScrollRef}>
-                <div className="review-text"><RichTextDisplay content={card.frontText} /></div>
-                <CardMediaList media={media} side="front" hideMeta />
+        <div className="swipe-card">
+          <motion.div
+            className="flip-card-inner"
+            animate={{ rotateY: revealed ? 180 : 0 }}
+            transition={{ duration: 0.46, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="flip-card-face flip-card-front">
+              <CardToolbar
+                starred={card.starred === true}
+                canGoPrevious={canGoPrevious}
+                onPrevious={onPrevious}
+                onToggleStarred={onToggleStarred}
+              />
+              <div className="review-side centered">
+                <p className="side-label">{t.deck.frontSide}</p>
+                <div className="review-scroll" ref={frontScrollRef}>
+                  <div className="review-scroll-inner">
+                    <div className="review-text"><RichTextDisplay content={card.frontText} /></div>
+                    <CardMediaList media={media} side="front" hideMeta />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flip-card-face flip-card-back">
-            <CardToolbar
-              starred={card.starred === true}
-              canGoPrevious={canGoPrevious}
-              onPrevious={onPrevious}
-              onToggleStarred={onToggleStarred}
-            />
-            <div className="review-side centered">
-              <p className="side-label">{t.deck.backSide}</p>
-              <div className="review-scroll" ref={backScrollRef}>
-                <div className="review-text"><RichTextDisplay content={card.backText} /></div>
-                <CardMediaList media={media} side="back" hideMeta />
+            <div className="flip-card-face flip-card-back">
+              <CardToolbar
+                starred={card.starred === true}
+                canGoPrevious={canGoPrevious}
+                onPrevious={onPrevious}
+                onToggleStarred={onToggleStarred}
+              />
+              <div className="review-side centered">
+                <p className="side-label">{t.deck.backSide}</p>
+                <div className="review-scroll" ref={backScrollRef}>
+                  <div className="review-scroll-inner">
+                    <div className="review-text"><RichTextDisplay content={card.backText} /></div>
+                    <CardMediaList media={media} side="back" hideMeta />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
       </motion.div>
       {showHint && <p className="gesture-hint">{t.study.hint}</p>}
     </div>
@@ -626,10 +632,37 @@ function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, o
     <div className="study-done modern-empty">
       <h2>{dueCount === 0 ? t.study.allDoneTitle : t.study.sessionDoneTitle}</h2>
       <p>{t.study.cardsDone}: {completed} · {t.study.inDeck}: {total} · {t.study.dueNow}: {dueCount}</p>
+
+      <div className="limit-selector">
+        <p className="side-label">Karet v průchodu</p>
+        <div className="segmented">
+          {[10, 20, 50, 0].map((val) => (
+            <button
+              key={val}
+              className={limit === val ? 'active' : ''}
+              onClick={() => setLimit(val)}
+            >
+              {val === 0 ? 'Vše' : val}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="limit-selector">
+        <p className="side-label">Pořadí</p>
+        <div className="segmented">
+          <button className={order === 'default' ? 'active' : ''} onClick={() => setOrder('default')}>Výchozí</button>
+          <button className={order === 'random' ? 'active' : ''} onClick={() => setOrder('random')}>Náhodné</button>
+        </div>
+      </div>
       
       <div className="session-actions">
         <button className="primary-button" onClick={onRepeatSame}>Procvičit znovu</button>
-        <p className="muted session-action-note">Spustí znovu právě dokončené kartičky, bez dalšího výběru průchodu.</p>
+        <p className="muted session-action-note">Procvičit znovu zopakuje právě dokončený výběr. Nový průchod znovu načte kartičky podle aktuálního limitu a pořadí.</p>
+        <button className="secondary-button" onClick={() => onStart('due')}>{t.study.reset}</button>
+        <button className="secondary-button" onClick={() => onStart('all')}>Všechny kartičky</button>
+        <button className="secondary-button" onClick={() => onStart('lapsed')}>{sourceLabels.lapsed}</button>
+        <button className="secondary-button" onClick={() => onStart('random')}>{sourceLabels.random}</button>
         <button className="secondary-button" onClick={onRetryMistakes} disabled={mistakes === 0}>{sourceLabels.mistakes} ({mistakes})</button>
         <button className="secondary-button" onClick={onBack}>{t.common.back}</button>
       </div>
