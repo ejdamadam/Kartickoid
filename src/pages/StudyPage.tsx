@@ -51,7 +51,6 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   const [mistakeIds, setMistakeIds] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
-  const [contentReady, setContentReady] = useState(false);
 
   const [limit, setLimit] = useState<number>(initialLimit);
   const [order, setOrder] = useState<'default' | 'random'>(initialOrder);
@@ -63,7 +62,6 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   useEffect(() => {
     let active = true;
     setLoading(true);
-    setContentReady(false);
     
     const filter: StudyFilter = { deckIds, tags };
     
@@ -98,13 +96,6 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
       active = false;
     };
   }, [deckIds, tags, source, sessionKey]);
-
-  useEffect(() => {
-    if (loading) return;
-    setContentReady(false);
-    const timeout = window.setTimeout(() => setContentReady(true), 160);
-    return () => window.clearTimeout(timeout);
-  }, [loading, sessionKey, source]);
 
   const dueCount = useMemo(() => {
     const now = new Date();
@@ -219,16 +210,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
       {error && <p className="error-box">{error}</p>}
 
       <AnimatePresence mode="wait">
-        {!contentReady ? (
-          <motion.div
-            key="preparing"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-          >
-            <article className="mode-panel"><p className="muted">Připravuji kartičku...</p></article>
-          </motion.div>
-        ) : !currentCard ? (
+        {!currentCard ? (
           <motion.div
             key="empty"
             initial={{ opacity: 0, scale: 0.94 }}
