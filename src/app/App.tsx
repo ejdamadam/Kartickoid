@@ -114,7 +114,7 @@ export default function App() {
 
       {modal && (
           <Modal title={modal === 'settings' ? 'Nastavení' : 'O aplikaci'} onClose={() => setModal(undefined)}>
-              {modal === 'settings' ? <SettingsModal onClose={() => setModal(undefined)} /> : <p>Kartičkoid v{APP_VERSION}</p>}
+              {modal === 'settings' ? <SettingsModal onClose={() => setModal(undefined)} /> : <p>Kartičkoid v{APP_VERSION}  ukuchtil Hůlka 2026 s Koudexem a Džeminou ;-P.</p>}
           </Modal>
       )}
       

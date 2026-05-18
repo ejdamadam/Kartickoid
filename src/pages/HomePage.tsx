@@ -162,10 +162,10 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
 
       {summaries.length > 0 && (
         <section className="dashboard-grid">
-          <div className="dashboard-card primary">
+          <div className="dashboard-card primary recent-deck-card">
             <div>
               <p className="eyebrow">{t.home.recentDecks}</p>
-              <strong>{summaries[0].deck.name}</strong>
+              <strong className="recent-deck-name">{summaries[0].deck.name}</strong>
               <p className="last-studied">{t.home.lastStudied}: {formatDateTime(summaries[0].lastReviewedAt)}</p>
             </div>
             <button className="light-button" onClick={() => onOpenDeck(summaries[0].deck.id)}>{t.home.continue}</button>
@@ -233,7 +233,7 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
             <p><strong>1. Vyberte sady:</strong></p>
             <div className="deck-selector-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', maxHeight: '200px', overflow: 'auto', padding: '5px' }}>
               {summaries.map(s => (
-                <label key={s.deck.id} className={`chip ${selectedDecks.includes(s.deck.id) ? 'selected' : ''}`} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                <label key={s.deck.id} className={`chip deck-select-chip ${selectedDecks.includes(s.deck.id) ? 'selected' : ''}`} style={{ cursor: 'pointer', textAlign: 'center' }}>
                   <input type="checkbox" checked={selectedDecks.includes(s.deck.id)} onChange={() => toggleDeckSelection(s.deck.id)} style={{ display: 'none' }} />
                   {s.deck.name}
                 </label>

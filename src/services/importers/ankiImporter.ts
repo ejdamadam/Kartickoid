@@ -22,10 +22,10 @@ function sanitizeHtml(html: string): string {
   div.innerHTML = html;
   
   function clean(node: Node) {
-    node.childNodes.forEach(child => {
+    Array.from(node.childNodes).forEach(child => {
       if (child.nodeType === Node.ELEMENT_NODE) {
         const el = child as HTMLElement;
-        if (!['UL', 'LI', 'B', 'I', 'STRONG', 'EM', 'BR'].includes(el.tagName)) {
+        if (!['P', 'DIV', 'UL', 'OL', 'LI', 'B', 'I', 'STRONG', 'EM', 'BR', 'SUB', 'SUP'].includes(el.tagName.toUpperCase())) {
            while (el.firstChild) el.parentNode?.insertBefore(el.firstChild, el);
            el.parentNode?.removeChild(el);
         } else {
@@ -40,6 +40,20 @@ function sanitizeHtml(html: string): string {
   
   clean(div);
   return div.innerHTML.trim();
+}
+
+function findNamedChild(parent: Element, tagName: string, name: string): Element | undefined {
+  const normalizedTag = tagName.toLowerCase();
+  const normalizedName = name.toLowerCase();
+  return Array.from(parent.children).find((child) => (
+    child.localName.toLowerCase() === normalizedTag
+    && (child.getAttribute('name') ?? '').toLowerCase() === normalizedName
+  ));
+}
+
+function findDirectChild(parent: Element, tagName: string): Element | undefined {
+  const normalizedTag = tagName.toLowerCase();
+  return Array.from(parent.children).find((child) => child.localName.toLowerCase() === normalizedTag);
 }
 
 export function previewAnkiXml(xmlText: string): { cardCount: number; deckName?: string } {
@@ -64,23 +78,24 @@ export function parseAnkiXml(xmlText: string): ParsedAnkiCard[] {
   for (let i = 0; i < cardElements.length; i++) {
     const cardEl = cardElements[i];
     
-    const frontEl = cardEl.querySelector('rich-text[name="Front"]');
-    const backEl = cardEl.querySelector('rich-text[name="Back"]');
-    const audioEl = cardEl.querySelector('audio[name="Speech"] > audio');
-    const textEl = cardEl.querySelector('text[name="Text"]');
+    const frontEl = findNamedChild(cardEl, 'rich-text', 'front');
+    const backEl = findNamedChild(cardEl, 'rich-text', 'back');
+    const speechEl = findNamedChild(cardEl, 'audio', 'speech');
+    const audioEl = speechEl ? findDirectChild(speechEl, 'audio') : undefined;
+    const textEl = findNamedChild(cardEl, 'text', 'text');
 
     let frontText = '';
     let backText = '';
     const mediaRefs: AnkiMediaRef[] = [];
 
     if (audioEl) {
-      frontText = textEl?.textContent || '';
-      backText = '';
+      frontText = '';
+      backText = textEl?.textContent || '';
       const hash = audioEl.getAttribute('id') || '';
       if (hash) {
         mediaRefs.push({
           hash,
-          side: 'back',
+          side: 'front',
           mimeType: audioEl.getAttribute('type') || 'audio/mpeg',
           name: 'Audio',
           compressAudio: false,
@@ -102,8 +117,8 @@ export function parseAnkiXml(xmlText: string): ParsedAnkiCard[] {
         }
         return sanitizeHtml(content.replace(blobRegex, ''));
       };
-      frontText = processContent(backEl?.innerHTML || '', 'front');
-      backText = processContent(frontEl?.innerHTML || '', 'back');
+      frontText = processContent(frontEl?.innerHTML || '', 'front');
+      backText = processContent(backEl?.innerHTML || '', 'back');
     }
 
     const timestamp = nowIso();

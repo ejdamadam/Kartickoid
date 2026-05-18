@@ -29,6 +29,7 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
   const [media, setMedia] = useState<PendingCardMedia[]>([]);
   const [saving, setSaving] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [processingLabel, setProcessingLabel] = useState<string>();
   const [error, setError] = useState<string>();
   const [preview, setPreview] = useState<PendingCardMedia>();
 
@@ -69,19 +70,23 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
     const selected = Array.from(files);
     if (selected.length === 0) return;
     setProcessing(true);
+    setProcessingLabel(t.cardForm.compressing);
     setError(undefined);
     try {
       const processed: PendingCardMedia[] = [];
       for (const file of selected) {
         processed.push(options.recordedAudio
           ? await processRecordedAudioForCard(file, side)
-          : await processMediaForCard(file, side));
+          : await processMediaForCard(file, side, (_, label) => {
+              if (label) setProcessingLabel(label);
+            }));
       }
       setMedia((current) => [...current, ...processed]);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.deck.imageError);
     } finally {
       setProcessing(false);
+      setProcessingLabel(undefined);
     }
   }
 
@@ -105,7 +110,7 @@ export default function CardForm({ card, existingMediaCount = 0, tagSuggestions 
   return (
     <form className="stack" onSubmit={handleSubmit}>
       {error && <p className="error-box">{error}</p>}
-      {processing && <p className="success-box">{t.cardForm.compressing}</p>}
+      {processing && <p className="success-box">{processingLabel || t.cardForm.compressing}</p>}
 
       <label>
         {t.deck.frontSide}
@@ -242,7 +247,7 @@ function MediaDropZone({ side, media, onAdd, onRemove, onMove, onPreview }: {
       <div className="upload-buttons">
         <label className="upload-button">Obrázek<input type="file" accept="image/*" multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
         <label className="upload-button">Zvuk<input type="file" accept={AUDIO_FILE_ACCEPT} multiple onChange={(e) => e.target.files && onAdd(e.target.files, side)} /></label>
-        <button className="upload-button" type="button" onClick={recording ? stopRecording : startRecording} style={{ background: recording ? '#f44336' : '#eee' }}>
+        <button className={`upload-button record-button ${recording ? 'recording' : ''}`} type="button" onClick={recording ? stopRecording : startRecording}>
             {recording ? 'Stop' : 'Nahrát zvuk'}
         </button>
       </div>

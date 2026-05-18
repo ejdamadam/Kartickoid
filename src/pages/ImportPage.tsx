@@ -16,6 +16,8 @@ interface ImportPageProps {
 }
 
 type ImportTab = 'json' | 'csv' | 'markdown' | 'anki';
+type SkippedAnkiMediaReason = 'missing' | 'empty' | 'unsupported';
+type SkippedAnkiMedia = { hash: string; side: 'front' | 'back'; reason: SkippedAnkiMediaReason };
 
 const emptyPreview: ImportPreview = { cards: [], skippedRows: 0, warnings: [] };
 
@@ -34,6 +36,8 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
   const [ankiCardCount, setAnkiCardCount] = useState(0);
   const [zipFileName, setZipFileName] = useState('');
   const [ankiStatus, setAnkiStatus] = useState<string>();
+  const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
+  const [exportLabel, setExportLabel] = useState<string>('');
 
   useEffect(() => {
     loadDecks();
@@ -63,7 +67,7 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
     }
 
     if (mode === 'reset') {
-      const ok = window.confirm('Tento krok smaže aktuální lokální data a nahradí je obsahem zálohy. Před obnovou se stáhne bezpečnostní snapshot aktuálního stavu. Pokračovat?');
+      const ok = window.confirm('Tento krok smaže aktuální lokální data a nahradí je obsahem zálohy. Před obnovou se uloží bezpečnostní snapshot do historie záloh bez stahování souboru. Pokračovat?');
       if (!ok) return;
     }
 
@@ -87,11 +91,38 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
   async function handleDownloadZipBackup() {
     setError(undefined);
     setMessage(undefined);
+    setExportProgress(null);
+    setExportLabel('');
     try {
-      await downloadBackupZip();
+      await downloadBackupZip((current, total, label) => {
+          setExportProgress({ current, total });
+          if (label) setExportLabel(label);
+      });
       setMessage('ZIP záloha byla vytvořena. Je vhodná pro kompletní obnovu včetně médií.');
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
+    } finally {
+      setExportProgress(null);
+      setExportLabel('');
+    }
+  }
+
+  async function handleDownloadJsonBackup() {
+    setError(undefined);
+    setMessage(undefined);
+    setExportProgress(null);
+    setExportLabel('');
+    try {
+      await downloadBackup((current, total, label) => {
+          setExportProgress({ current, total });
+          if (label) setExportLabel(label);
+      });
+      setMessage('JSON záloha byla vytvořena.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    } finally {
+      setExportProgress(null);
+      setExportLabel('');
     }
   }
 
@@ -148,7 +179,7 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
     setAnkiStatus('Načítám ZIP z Anki…');
     try {
       const zip = await JSZip.loadAsync(file);
-      const xmlFile = Object.values(zip.files).find((f) => f.name.endsWith('.xml'));
+      const xmlFile = findAnkiXmlEntry(zip);
       if (!xmlFile) throw new Error('Nebylo nalezeno žádné XML v ZIPu.');
       setAnkiStatus('Čtu seznam kartiček…');
       const xmlText = await xmlFile.async('string');
@@ -183,34 +214,67 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
       if (!deckId) throw new Error('Vyberte balíček nebo vytvořte nový.');
 
       const zip = await JSZip.loadAsync(ankiFile);
-      const xmlFile = Object.values(zip.files).find((f) => f.name.endsWith('.xml'));
+      const xmlFile = findAnkiXmlEntry(zip);
       if (!xmlFile) throw new Error('Nebylo nalezeno žádné XML v ZIPu.');
       setAnkiStatus('Čtu seznam kartiček…');
       const parsedCards = parseAnkiXml(await xmlFile.async('string'));
       let importedCards = 0;
       let importedMedia = 0;
+      const skippedMedia = { missing: 0, empty: 0, unsupported: 0 };
+      let cardsWithSkippedMedia = 0;
       
       for (let index = 0; index < parsedCards.length; index++) {
         const entry = parsedCards[index];
         setAnkiStatus(`Ukládám kartičky z Anki (${index + 1}/${parsedCards.length})…`);
         const newCard = { ...entry.card, deckId };
-        const id = await db.cards.add(newCard);
+        const id = newCard.id;
+        await db.cards.add(newCard);
+        const skippedForCard: SkippedAnkiMedia[] = [];
 
         for (let mediaIndex = 0; mediaIndex < entry.mediaRefs.length; mediaIndex++) {
           const mediaRef = entry.mediaRefs[mediaIndex];
           setAnkiStatus(`Ukládám média z Anki (${index + 1}/${parsedCards.length}, soubor ${mediaIndex + 1}/${entry.mediaRefs.length})…`);
-          const zipEntry = zip.file(`blobs/${mediaRef.hash}`) ?? zip.file(mediaRef.hash);
-          if (!zipEntry) continue;
+          const zipEntry = findAnkiBlobEntry(zip, mediaRef.hash);
+          if (!zipEntry) {
+            skippedMedia.missing += 1;
+            skippedForCard.push({ hash: mediaRef.hash, side: mediaRef.side, reason: 'missing' });
+            continue;
+          }
           const blob = await zipEntry.async('blob');
-          const media = await processImportedMedia(blob, mediaRef.side, {
-            mimeType: mediaRef.mimeType,
-            name: mediaRef.name,
-            compressAudio: mediaRef.compressAudio,
-            readAudioDuration: mediaRef.readAudioDuration
-          });
-          await addMediaToCard({ ...media, cardId: id, deckId });
-          importedMedia += 1;
+          if (blob.size === 0) {
+            skippedMedia.empty += 1;
+            skippedForCard.push({ hash: mediaRef.hash, side: mediaRef.side, reason: 'empty' });
+            continue;
+          }
+          try {
+            const media = await processImportedMedia(blob, mediaRef.side, {
+              mimeType: mediaRef.mimeType,
+              name: mediaRef.name,
+              compressAudio: mediaRef.compressAudio,
+              readAudioDuration: mediaRef.readAudioDuration,
+              onProgress: (_, label) => {
+                if (label) {
+                  setAnkiStatus(`Ukládám média z Anki (${index + 1}/${parsedCards.length}, soubor ${mediaIndex + 1}/${entry.mediaRefs.length}) - ${label}`);
+                }
+              }
+            });
+            await addMediaToCard({ ...media, cardId: id, deckId });
+            importedMedia += 1;
+          } catch (err) {
+            console.warn('Anki médium bylo přeskočeno:', mediaRef.hash, err);
+            skippedMedia.unsupported += 1;
+            skippedForCard.push({ hash: mediaRef.hash, side: mediaRef.side, reason: 'unsupported' });
+          }
           await new Promise((resolve) => window.setTimeout(resolve, 0));
+        }
+
+        if (skippedForCard.length > 0) {
+          cardsWithSkippedMedia += 1;
+          await db.cards.update(id, {
+            backText: appendSkippedMediaNote(newCard.backText, skippedForCard),
+            tags: Array.from(new Set([...newCard.tags, 'import-problem'])),
+            updatedAt: nowIso()
+          });
         }
 
         importedCards += 1;
@@ -220,7 +284,8 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
       }
       
       await db.decks.update(deckId, { updatedAt: nowIso() });
-      setMessage(`Importováno ${importedCards} karet z Anki a ${importedMedia} médií.`);
+      const skippedTotal = skippedMedia.missing + skippedMedia.empty + skippedMedia.unsupported;
+      setMessage(`Importováno ${importedCards} karet z Anki a ${importedMedia} médií.${skippedTotal > 0 ? ` Přeskočeno ${skippedTotal} médií u ${cardsWithSkippedMedia} karet (${formatSkippedMediaSummary(skippedMedia)}). Dotčené karty mají tag import-problem a poznámku v odpovědi.` : ''}`);
       setAnkiFile(undefined);
       setAnkiCardCount(0);
       onChanged();
@@ -265,11 +330,25 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
       {tab === 'json' && (
         <section className="panel stack">
           <h2>Záloha a import</h2>
+          <div className="settings-help-box" style={{ marginBottom: '0.5rem', borderLeft: '4px solid var(--primary-color)' }}>
+            <strong>Padá vám aplikace při exportu?</strong>
+            <p className="muted" style={{ margin: '0.4rem 0 0' }}>U velkých knihoven (zejména na iPhone) může dojít k vyčerpání paměti. V takovém případě jděte do <strong>Nastavení → Rozdělený export</strong> a stáhněte si zálohu po částech. Ty pak můžete nahrát sem jednu po druhé pomocí <em>Soft importu</em>.</p>
+          </div>
           <p>ZIP je doporučená kompletní záloha: ukládá backup.json a média jako samostatné soubory, takže je vhodnější pro obnovu celého balíku dat. JSON zůstává jako doplňková pokročilá varianta.</p>
           <div className="button-row export-priority-row">
-            <button className="primary-button" type="button" onClick={handleDownloadZipBackup}>Exportovat ZIP zálohu</button>
-            <button className="secondary-button" type="button" onClick={downloadBackup}>Exportovat JSON</button>
+            <button className="primary-button" type="button" onClick={handleDownloadZipBackup} disabled={exportProgress !== null}>Exportovat ZIP zálohu</button>
+            <button className="secondary-button" type="button" onClick={handleDownloadJsonBackup} disabled={exportProgress !== null}>Exportovat JSON</button>
           </div>
+
+          {exportProgress && (
+            <div className="preview-row" style={{ gap: '0.8rem', marginTop: '0.5rem' }}>
+              <strong>{exportLabel || 'Exportuji data...'}</strong>
+              <div className="progress-track">
+                <span style={{ width: `${(exportProgress.current / exportProgress.total) * 100}%` }} />
+              </div>
+              <small className="muted">{exportProgress.current === exportProgress.total && exportProgress.total === 100 ? '100%' : `${exportProgress.current} / ${exportProgress.total}`}</small>
+            </div>
+          )}
 
           <JsonImportAction
             title="Soft import — sloučit bez duplicit"
@@ -377,6 +456,43 @@ export default function ImportPage({ onChanged, onDeckCreated }: ImportPageProps
       )}
     </section>
   );
+}
+
+function findAnkiXmlEntry(zip: JSZip): JSZip.JSZipObject | null {
+  return Object.values(zip.files).find((file) => !file.dir && file.name.toLowerCase().endsWith('.xml')) ?? null;
+}
+
+function findAnkiBlobEntry(zip: JSZip, hash: string): JSZip.JSZipObject | null {
+  return zip.file(`blobs/${hash}`)
+    ?? zip.file(hash)
+    ?? Object.values(zip.files).find((file) => !file.dir && file.name.split('/').pop() === hash)
+    ?? null;
+}
+
+function appendSkippedMediaNote(html: string, skipped: SkippedAnkiMedia[]): string {
+  const items = skipped.map((item) => (
+    `<li>${mediaSideLabel(item.side)}: ${skippedMediaReasonLabel(item.reason)} <code>${item.hash}</code></li>`
+  )).join('');
+  const note = `<div class="import-warning" data-import-warning="true"><strong>Import:</strong> Přeskočeno ${skipped.length} médií v této kartě.<ul>${items}</ul></div>`;
+  return `${html || ''}${note}`;
+}
+
+function formatSkippedMediaSummary(skipped: Record<SkippedAnkiMediaReason, number>): string {
+  return [
+    skipped.missing > 0 ? `chybí ${skipped.missing}` : '',
+    skipped.empty > 0 ? `prázdné ${skipped.empty}` : '',
+    skipped.unsupported > 0 ? `nepodporované ${skipped.unsupported}` : ''
+  ].filter(Boolean).join(', ');
+}
+
+function skippedMediaReasonLabel(reason: SkippedAnkiMediaReason): string {
+  if (reason === 'missing') return 'soubor v ZIPu chybí';
+  if (reason === 'empty') return 'soubor je prázdný';
+  return 'soubor nejde zpracovat';
+}
+
+function mediaSideLabel(side: 'front' | 'back'): string {
+  return side === 'front' ? 'přední strana' : 'zadní strana';
 }
 
 function JsonImportAction({ title, description, buttonLabel, danger, onFile }: {

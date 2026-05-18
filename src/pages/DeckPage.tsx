@@ -43,6 +43,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [starFilter, setStarFilter] = useState<'all' | 'starred' | 'unstarred'>('all');
   const [error, setError] = useState<string>();
+  const [mediaStatus, setMediaStatus] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'list' | 'stats'>('list');
   const [deckStats, setDeckStats] = useState<DeckStats>();
@@ -136,10 +137,11 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
   async function flipSide(card: Card) {
     pendingScrollY.current = window.scrollY;
     try {
+      const timestamp = nowIso();
       await db.cards.update(card.id, {
         frontText: card.backText,
         backText: card.frontText,
-        updatedAt: nowIso()
+        updatedAt: timestamp
       });
       const cardMedia = media.filter((item) => item.cardId === card.id);
       for (const item of cardMedia) {
@@ -151,12 +153,54 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
         ...item,
         frontText: card.backText,
         backText: card.frontText,
-        updatedAt: nowIso()
+        updatedAt: timestamp
       } : item));
       setMedia((current) => current.map((item) => item.cardId === card.id ? {
         ...item,
         side: item.side === 'front' ? 'back' : 'front'
       } : item));
+      onChanged();
+    } catch (err) {
+      pendingScrollY.current = undefined;
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  async function flipAllSides() {
+    if (!deck || cards.length === 0) return;
+    const ok = window.confirm(`Prohodit přední a zadní stranu u všech ${cards.length} kartiček v balíčku "${deck.name}"? Prohodí se i obrázky a zvuky.`);
+    if (!ok) return;
+
+    pendingScrollY.current = window.scrollY;
+    setError(undefined);
+    try {
+      const timestamp = nowIso();
+      await db.transaction('rw', db.cards, db.media, async () => {
+        for (const card of cards) {
+          await db.cards.update(card.id, {
+            frontText: card.backText,
+            backText: card.frontText,
+            updatedAt: timestamp
+          });
+        }
+        for (const item of media) {
+          await db.media.update(item.id, {
+            side: item.side === 'front' ? 'back' : 'front'
+          });
+        }
+      });
+
+      setCards((current) => current.map((card) => ({
+        ...card,
+        frontText: card.backText,
+        backText: card.frontText,
+        updatedAt: timestamp
+      })));
+      setMedia((current) => current.map((item) => ({
+        ...item,
+        side: item.side === 'front' ? 'back' : 'front'
+      })));
+      await db.decks.update(deck.id, { updatedAt: timestamp });
       onChanged();
     } catch (err) {
       pendingScrollY.current = undefined;
@@ -350,12 +394,18 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
   async function uploadMedia(card: Card, side: CardSide, file?: File) {
     if (!file) return;
     pendingScrollY.current = window.scrollY;
+    setMediaStatus('Zpracovávám média...');
+    setError(undefined);
     try {
-      const item = await processMediaForCard(file, side);
+      const item = await processMediaForCard(file, side, (_, label) => {
+        if (label) setMediaStatus(label);
+      });
       await addMediaToCard({ ...item, cardId: card.id, deckId });
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.deck.imageError);
+    } finally {
+      setMediaStatus(undefined);
     }
   }
 
@@ -410,11 +460,13 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
           <button className="secondary-button" onClick={() => setBulkAddOpen(true)}>Přidat více kartiček</button>
           <button className="secondary-button" onClick={exportCsv}>{t.deck.csvExport}</button>
           <button className="secondary-button" onClick={exportDeck}>{t.deck.exportDeck}</button>
+          <button className="secondary-button" onClick={flipAllSides}>Prohodit celý balíček</button>
           <button className="secondary-button" onClick={duplicateDeck}>{t.deck.duplicate}</button>
         </div>
       </div>
 
       {error && <p className="error-box">{error}</p>}
+      {mediaStatus && <p className="success-box" role="status">{mediaStatus}</p>}
 
       <div className="stats-row">
         <span><strong>{stats.total}</strong> {t.deck.total}</span>
@@ -511,7 +563,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
                       aria-label={card.starred === true ? 'Odebrat hvězdičku' : 'Označit hvězdičkou'}
                       title={card.starred === true ? 'Odebrat hvězdičku' : 'Označit hvězdičkou'}
                     >
-                      ★
+                      {card.starred === true ? '★' : '☆'}
                     </button>
                   </div>
                   <div className="card-preview-columns">

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import type { CardSide, PendingCardMedia } from '../types';
-import { processImageForCard } from '../services/imageProcessing';
+import { processMediaForCard } from '../services/mediaProcessing';
 import ObjectImage from './ObjectImage';
 import RichTextEditor from './RichTextEditor';
 import type { CardFormValues } from './CardForm';
+import { t } from '../i18n';
 
 interface DraftCard {
   id: string;
@@ -22,6 +23,7 @@ export default function MultiCardCreator({ onCreate, onCancel }: MultiCardCreato
   const [drafts, setDrafts] = useState<DraftCard[]>(() => createDrafts(1));
   const [saving, setSaving] = useState(false);
   const [processingId, setProcessingId] = useState<string>();
+  const [processingLabel, setProcessingLabel] = useState<string>();
   const [error, setError] = useState<string>();
 
   const validCards = useMemo(() => drafts.filter(isReadyDraft), [drafts]);
@@ -34,13 +36,19 @@ export default function MultiCardCreator({ onCreate, onCancel }: MultiCardCreato
     setDrafts((current) => [...current, ...createDrafts(1)]);
   }
 
-  async function addImages(id: string, side: CardSide, files?: FileList | null) {
+  async function addMedia(id: string, side: CardSide, files?: FileList | null) {
     const selected = Array.from(files ?? []);
     if (selected.length === 0) return;
     setProcessingId(id);
+    setProcessingLabel('Zpracovávám média...');
     setError(undefined);
     try {
-      const processed = await Promise.all(selected.map((file) => processImageForCard(file, side)));
+      const processed: PendingCardMedia[] = [];
+      for (const file of selected) {
+          processed.push(await processMediaForCard(file, side, (_, label) => {
+              if (label) setProcessingLabel(label);
+          }));
+      }
       setDrafts((current) => current.map((draft) => (
         draft.id === id ? { ...draft, media: [...draft.media, ...processed] } : draft
       )));
@@ -48,6 +56,7 @@ export default function MultiCardCreator({ onCreate, onCancel }: MultiCardCreato
       setError(err instanceof Error ? err.message : 'Přílohy se nepodařilo zpracovat.');
     } finally {
       setProcessingId(undefined);
+      setProcessingLabel(undefined);
     }
   }
 
@@ -109,7 +118,7 @@ export default function MultiCardCreator({ onCreate, onCancel }: MultiCardCreato
                 draft={draft}
                 content={draft.frontText}
                 onChange={(frontText) => updateDraft(draft.id, { frontText })}
-                onAddImages={addImages}
+                onAddMedia={addMedia}
                 onRemoveMedia={removeMedia}
               />
               <CardSideEditor
@@ -118,7 +127,7 @@ export default function MultiCardCreator({ onCreate, onCancel }: MultiCardCreato
                 draft={draft}
                 content={draft.backText}
                 onChange={(backText) => updateDraft(draft.id, { backText })}
-                onAddImages={addImages}
+                onAddMedia={addMedia}
                 onRemoveMedia={removeMedia}
               />
             </div>
@@ -126,7 +135,7 @@ export default function MultiCardCreator({ onCreate, onCancel }: MultiCardCreato
               Tagy oddělené čárkou
               <input value={draft.tagsText} onChange={(event) => updateDraft(draft.id, { tagsText: event.target.value })} placeholder="kapitola, důležité" />
             </label>
-            {processingId === draft.id && <p className="muted">Zpracovávám obrázky...</p>}
+            {processingId === draft.id && <p className="muted">{processingLabel || 'Zpracovávám média...'}</p>}
           </article>
         ))}
         <button className="add-card-button" type="button" onClick={addDraft} aria-label="Přidat další kartičku">
@@ -145,15 +154,16 @@ export default function MultiCardCreator({ onCreate, onCancel }: MultiCardCreato
   );
 }
 
-function CardSideEditor({ label, side, draft, content, onChange, onAddImages, onRemoveMedia }: {
+function CardSideEditor({ label, side, draft, content, onChange, onAddMedia, onRemoveMedia }: {
   label: string;
   side: CardSide;
   draft: DraftCard;
   content: string;
   onChange: (content: string) => void;
-  onAddImages: (draftId: string, side: CardSide, files?: FileList | null) => Promise<void>;
+  onAddMedia: (draftId: string, side: CardSide, files?: FileList | null) => Promise<void>;
   onRemoveMedia: (draftId: string, mediaId: string) => void;
 }) {
+
   const sideMedia = draft.media.filter((item) => item.side === side);
 
   return (
@@ -163,13 +173,13 @@ function CardSideEditor({ label, side, draft, content, onChange, onAddImages, on
         <RichTextEditor content={content} onChange={onChange} />
       </label>
       <label className="upload-button secondary-button">
-        Obrázek
+        Příloha
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,audio/*"
           multiple
           onChange={(event) => {
-            void onAddImages(draft.id, side, event.target.files);
+            void onAddMedia(draft.id, side, event.target.files);
             event.currentTarget.value = '';
           }}
         />

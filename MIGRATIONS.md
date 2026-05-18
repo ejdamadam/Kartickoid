@@ -57,6 +57,13 @@ Při kolizi ID se vztahy mezi balíčky, kartičkami, médii a logy přemapují 
 
 OneDrive je experimentální doplňková cesta pro uložení ZIP záloh do aplikační složky Kartičkoid v OneDrive. Nepovažuje se za primární migrační mechanismus ani za jedinou spolehlivou kopii dat. Pro běžnou obnovu zůstává doporučený ZIP export stažený mimo prohlížeč.
 
-## Budoucí kompatibilita s Anki
+## Optimalizace pro velké knihovny a iPhone
 
-Importéry jsou ve složce `src/services/importers`. Anki ZIP importer je oddělený od CSV, Markdownu a hromadného parseru, aby šlo externí modely mapovat na interní záznamy `Deck`, `Card`, `Media` a `ReviewLog` bez zásahu do hlavního UI.
+Od verze aplikace 1.0.7 a 1.0.8 byly přidány mechanismy pro zvládnutí extrémně velkých záloh (stovky MB) na zařízeních s omezenou pamětí (iPhone):
+
+- **Rozdělený export:** Možnost rozdělit ZIP zálohu na více menších souborů (segmentů) podle počtu médií.
+- **Vypnutí historie pro velké exporty:** Volba umožňující vynechat zápis exportovaného souboru zpět do lokální databáze, což šetří 50 % operační paměti při procesu stahování.
+- **ZIP bez komprese:** Pro média (JPG, MP3) se v ZIPu používá režim `STORE`, který je dramaticky rychlejší a paměťově méně náročný než standardní komprese.
+- **Streaming:** ZIP generování používá vnitřní streaming souborů, aby se minimalizoval počet objektů držených v RAM najednou.
+
+Při obnově z rozdělené zálohy se používá standardní Soft import, který postupně doplňuje chybějící média k existující struktuře dat.

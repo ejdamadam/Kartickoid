@@ -356,7 +356,7 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
   return (
     <div className="learning-shell">
       <motion.div
-        className="swipe-card-shell"
+        className={`swipe-card-shell ${revealed ? 'is-flipped' : ''}`}
         style={{ x, y, rotate }}
         drag={!isDismissing}
         dragElastic={0.22}
@@ -436,7 +436,7 @@ function CardToolbar({ starred, canGoPrevious, onPrevious, onToggleStarred }: {
         aria-label={starred ? 'Odebrat hvězdičku' : 'Označit hvězdičkou'}
         title={starred ? 'Odebrat hvězdičku' : 'Označit hvězdičkou'}
       >
-        ★
+        {starred ? '★' : '☆'}
       </button>
       <button className="back-icon-button card-back-control" type="button" onClick={(event) => { event.stopPropagation(); onPrevious(); }} disabled={!canGoPrevious} aria-label="Předchozí kartička" title="Předchozí kartička">
         ←

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import ObjectImage from '../components/ObjectImage';
 import RichTextDisplay from '../components/RichTextDisplay';
 import { db } from '../db/database';
-import type { Card, Deck } from '../types';
+import type { Card, CardSide, Deck, Media } from '../types';
 import { shuffle } from '../utils/random';
 
 interface MatchPageProps {
@@ -13,7 +14,8 @@ interface MatchItem {
   id: string;
   cardId: string;
   content: string;
-  side: 'front' | 'back';
+  images: Media[];
+  side: CardSide;
 }
 
 interface MatchAttempt {
@@ -24,6 +26,7 @@ interface MatchAttempt {
 export default function MatchPage({ deckId, onBack }: MatchPageProps) {
   const [deck, setDeck] = useState<Deck>();
   const [cards, setCards] = useState<Card[]>([]);
+  const [media, setMedia] = useState<Media[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [wrongPairs, setWrongPairs] = useState<MatchAttempt[]>([]);
@@ -40,11 +43,14 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
     setLoading(true);
     Promise.all([
       db.decks.get(deckId),
-      db.cards.where('deckId').equals(deckId).toArray()
-    ]).then(([nextDeck, nextCards]) => {
+      db.cards.where('deckId').equals(deckId).toArray(),
+      db.media.toArray()
+    ]).then(([nextDeck, nextCards, nextMedia]) => {
       if (!active) return;
+      const imageMedia = nextMedia.filter((item) => item.deckId === deckId && item.type === 'image');
       setDeck(nextDeck);
-      setCards(shuffle(nextCards.filter((card) => card.frontText.trim() && card.backText.trim())).slice(0, 6));
+      setMedia(imageMedia);
+      setCards(shuffle(nextCards.filter((card) => hasMatchContent(card, 'front', imageMedia) && hasMatchContent(card, 'back', imageMedia))).slice(0, 6));
       setSelectedIds([]);
       setMatchedCardIds([]);
       setWrongPairs([]);
@@ -68,9 +74,9 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
   }, []);
 
   const matchItems = useMemo<MatchItem[]>(() => shuffle(cards.flatMap((card) => [
-    { id: `${card.id}:front`, cardId: card.id, side: 'front' as const, content: card.frontText },
-    { id: `${card.id}:back`, cardId: card.id, side: 'back' as const, content: card.backText }
-  ])), [cards]);
+    { id: `${card.id}:front`, cardId: card.id, side: 'front' as const, content: card.frontText, images: sideImages(card.id, 'front', media) },
+    { id: `${card.id}:back`, cardId: card.id, side: 'back' as const, content: card.backText, images: sideImages(card.id, 'back', media) }
+  ])), [cards, media]);
 
   const matchedCardIdSet = new Set(matchedCardIds);
   const activeItems = matchItems.filter((item) => !matchedCardIdSet.has(item.cardId));
@@ -151,7 +157,7 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
                   disabled={wrongFlashIds.length > 0 || correctFlashIds.length > 0}
                   onClick={() => chooseItem(item)}
                 >
-                  <RichTextDisplay content={item.content} />
+                  <MatchItemContent item={item} />
                 </button>
               );
             })}
@@ -167,9 +173,9 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
                     const firstCard = cards.find((card) => card.id === pair.first.cardId);
                     return (
                       <div className="preview-row invalid" key={`${pair.first.id}-${pair.second.id}`}>
-                        <strong><RichTextDisplay content={pair.first.content} /></strong>
-                        <span>Patří k: <RichTextDisplay content={pair.first.side === 'front' ? firstCard?.backText ?? '' : firstCard?.frontText ?? ''} /></span>
-                        <small>Zvoleno: <RichTextDisplay content={pair.second.content} /></small>
+                        <strong><MatchItemContent item={pair.first} /></strong>
+                        <span>Patří k: {firstCard && <MatchItemContent item={oppositeItem(firstCard, pair.first.side, media)} />}</span>
+                        <small>Zvoleno: <MatchItemContent item={pair.second} /></small>
                       </div>
                     );
                   })}
@@ -182,4 +188,51 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
       )}
     </section>
   );
+}
+
+function MatchItemContent({ item }: { item: MatchItem }) {
+  const hasText = hasDisplayText(item.content);
+  return (
+    <span className="match-item-content">
+      {hasText && <RichTextDisplay content={item.content} />}
+      {item.images.length > 0 && (
+        <span className="match-image-list">
+          {item.images.map((image) => (
+            <ObjectImage blob={image.blob} alt={image.name || 'Obrázek kartičky'} key={image.id} />
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function oppositeItem(card: Card, side: CardSide, media: Media[]): MatchItem {
+  const oppositeSide: CardSide = side === 'front' ? 'back' : 'front';
+  return {
+    id: `${card.id}:${oppositeSide}`,
+    cardId: card.id,
+    side: oppositeSide,
+    content: oppositeSide === 'front' ? card.frontText : card.backText,
+    images: sideImages(card.id, oppositeSide, media)
+  };
+}
+
+function hasMatchContent(card: Card, side: CardSide, media: Media[]): boolean {
+  const text = side === 'front' ? card.frontText : card.backText;
+  return hasDisplayText(text) || sideImages(card.id, side, media).length > 0;
+}
+
+function sideImages(cardId: string, side: CardSide, media: Media[]): Media[] {
+  return media.filter((item) => item.cardId === cardId && item.side === side && item.type === 'image');
+}
+
+function hasDisplayText(html: string): boolean {
+  return html
+    .replace(/<div[^>]*data-import-warning="true"[^>]*>[\s\S]*?<\/div>/gi, ' ')
+    .replace(/<div[^>]*class="[^"]*\bimport-warning\b[^"]*"[^>]*>[\s\S]*?<\/div>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim().length > 0;
 }

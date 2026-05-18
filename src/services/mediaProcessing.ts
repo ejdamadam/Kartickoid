@@ -6,8 +6,8 @@ import { processImageBlobForCard, processImageForCard as processImage } from './
 export const AUDIO_FILE_ACCEPT = 'audio/*,.m4a,.mp3,.wav,.webm,.ogg,.oga,.aac,.mp4';
 
 const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
-const TARGET_AUDIO_BITS_PER_SECOND = 64_000;
-const TARGET_AUDIO_SAMPLE_RATE = 44_100;
+const TARGET_AUDIO_BITS_PER_SECOND = 192_000;
+const TARGET_AUDIO_SAMPLE_RATE = 48_000;
 const AUDIO_EXTENSION_MIME: Record<string, string> = {
   aac: 'audio/aac',
   m4a: 'audio/mp4',
@@ -20,7 +20,11 @@ const AUDIO_EXTENSION_MIME: Record<string, string> = {
   webm: 'audio/webm'
 };
 
-export async function processMediaForCard(file: File, side: CardSide): Promise<PendingCardMedia> {
+export async function processMediaForCard(
+  file: File, 
+  side: CardSide,
+  onProgress?: (percent: number, label?: string) => void
+): Promise<PendingCardMedia> {
   if (file.type.startsWith('image/')) {
     return processImage(file, side);
   }
@@ -32,7 +36,11 @@ export async function processMediaForCard(file: File, side: CardSide): Promise<P
 
     const mimeType = normalizeAudioMimeType(file.type, file.name);
     const blob = file.type === mimeType ? file : file.slice(0, file.size, mimeType);
-    return processAudioForCard(blob, side, file.name || defaultAudioName(mimeType), mimeType);
+    return processAudioForCard(blob, side, file.name || defaultAudioName(mimeType), mimeType, { 
+        compress: true, 
+        readDuration: true,
+        onProgress
+    });
   }
 
   throw new Error('Nepodporovaný formát souboru.');
@@ -56,7 +64,13 @@ export async function processRecordedAudioForCard(file: File, side: CardSide): P
 export async function processImportedMedia(
   blob: Blob,
   side: CardSide,
-  options: { mimeType?: string; name?: string; compressAudio?: boolean; readAudioDuration?: boolean } = {}
+  options: { 
+    mimeType?: string; 
+    name?: string; 
+    compressAudio?: boolean; 
+    readAudioDuration?: boolean;
+    onProgress?: (percent: number, label?: string) => void;
+  } = {}
 ): Promise<PendingCardMedia> {
   const mimeType = await detectMediaMimeType(blob, options.mimeType, options.name);
   const name = options.name || defaultMediaName(mimeType);
@@ -71,7 +85,8 @@ export async function processImportedMedia(
     const audioBlob = typedBlob.type === audioMimeType ? typedBlob : typedBlob.slice(0, typedBlob.size, audioMimeType);
     return processAudioForCard(audioBlob, side, name, audioMimeType, {
       compress: options.compressAudio ?? false,
-      readDuration: options.readAudioDuration ?? false
+      readDuration: options.readAudioDuration ?? false,
+      onProgress: options.onProgress
     });
   }
 
@@ -94,14 +109,24 @@ async function processAudioForCard(
   side: CardSide,
   name: string,
   mimeType: string,
-  options: { compress?: boolean; readDuration?: boolean } = { compress: true, readDuration: true }
+  options: { compress?: boolean; readDuration?: boolean; onProgress?: (percent: number, label?: string) => void } = { compress: true, readDuration: true }
 ): Promise<PendingCardMedia> {
   const shouldCompress = options.compress ?? true;
   const shouldReadDuration = options.readDuration ?? true;
+  
+  options.onProgress?.(5, 'Načítám zvuková data...');
   const durationSeconds = shouldReadDuration ? await readAudioDuration(blob) : undefined;
-  const compressedBlob = shouldCompress ? await compressAudioBlob(blob) : undefined;
-  const finalBlob = compressedBlob ?? blob;
-  const finalDurationSeconds = compressedBlob ? await readAudioDuration(finalBlob) : durationSeconds;
+  
+  let finalBlob = blob;
+  if (shouldCompress) {
+      const compressedBlob = await compressAudioBlob(blob, (percent, label) => {
+          options.onProgress?.(10 + Math.round(percent * 0.85), label);
+      });
+      if (compressedBlob) finalBlob = compressedBlob;
+  }
+  
+  options.onProgress?.(98, 'Ukládám zvuk...');
+  const finalDurationSeconds = shouldCompress && finalBlob !== blob ? await readAudioDuration(finalBlob) : durationSeconds;
 
   return createAudioMedia(finalBlob, side, name, finalBlob.type || mimeType, finalDurationSeconds ?? durationSeconds ?? (shouldReadDuration ? undefined : null));
 }
@@ -204,7 +229,10 @@ function pickAudioRecorderMimeType(): string | undefined {
   ].find((type) => MediaRecorder.isTypeSupported(type));
 }
 
-async function compressAudioBlob(sourceBlob: Blob): Promise<Blob | undefined> {
+async function compressAudioBlob(
+  sourceBlob: Blob,
+  onProgress?: (percent: number, label?: string) => void
+): Promise<Blob | undefined> {
   if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') return undefined;
 
   const outputMimeType = pickAudioRecorderMimeType();
@@ -217,11 +245,13 @@ async function compressAudioBlob(sourceBlob: Blob): Promise<Blob | undefined> {
   let audioContext: AudioContext | undefined;
 
   try {
+    onProgress?.(0, 'Dekóduji audio...');
     decodeContext = new AudioContextCtor();
     const audioBuffer = await decodeContext.decodeAudioData(await sourceBlob.arrayBuffer());
     await decodeContext.close();
     decodeContext = undefined;
 
+    onProgress?.(5, 'Připravuji kompresi...');
     audioContext = new AudioContextCtor({ sampleRate: Math.min(TARGET_AUDIO_SAMPLE_RATE, audioBuffer.sampleRate) });
     const source = audioContext.createBufferSource();
     const destination = audioContext.createMediaStreamDestination();
@@ -235,21 +265,35 @@ async function compressAudioBlob(sourceBlob: Blob): Promise<Blob | undefined> {
     source.connect(destination);
 
     const recorded = new Promise<Blob>((resolve, reject) => {
+      const duration = Math.max(0.1, audioBuffer.duration);
+      let progressInterval: number | undefined;
+
       const timeout = window.setTimeout(() => {
         if (recorder.state !== 'inactive') recorder.stop();
+        if (progressInterval) window.clearInterval(progressInterval);
         reject(new Error('Kompresní nahrávání vypršelo.'));
-      }, Math.max(6000, audioBuffer.duration * 1000 + 3000));
+      }, Math.max(8000, duration * 1000 + 4000));
+
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data);
       };
       recorder.onerror = () => {
         window.clearTimeout(timeout);
+        if (progressInterval) window.clearInterval(progressInterval);
         reject(new Error('Audio se nepodařilo zkomprimovat.'));
       };
       recorder.onstop = () => {
         window.clearTimeout(timeout);
+        if (progressInterval) window.clearInterval(progressInterval);
         resolve(new Blob(chunks, { type: recorder.mimeType || outputMimeType }));
       };
+
+      const startTime = Date.now();
+      progressInterval = window.setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const percent = Math.min(99, Math.round((elapsed / duration) * 100));
+        onProgress?.(percent, `Komprimuji zvuk (${percent}%)`);
+      }, 500);
     });
 
     recorder.start(250);
@@ -258,17 +302,20 @@ async function compressAudioBlob(sourceBlob: Blob): Promise<Blob | undefined> {
     source.onended = () => {
       window.setTimeout(() => {
         if (recorder.state !== 'inactive') recorder.stop();
-      }, 120);
+      }, 150);
     };
 
     const compressed = await recorded;
     source.disconnect();
     await audioContext.close();
 
-    if (compressed.size > 0 && compressed.size < sourceBlob.size * 0.96) {
+    onProgress?.(100, 'Zvuk je zkomprimovaný');
+
+    if (compressed.size > 0 && compressed.size < sourceBlob.size * 0.9) {
       return compressed;
     }
-  } catch {
+  } catch (err) {
+    console.error('Audio compression failed:', err);
     // Some browsers cannot decode every imported audio format. Keeping the original is safer than failing the import.
   } finally {
     if (decodeContext && decodeContext.state !== 'closed') void decodeContext.close();

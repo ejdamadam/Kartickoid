@@ -46,7 +46,9 @@ const CURRENT_SCHEMA_VERSION = 3;
 const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2, 3]);
 const MAX_BACKUP_HISTORY = 8;
 
-export async function exportDatabase(): Promise<BackupFile> {
+export async function exportDatabase(
+  options: { includeMediaBlobs: boolean; onProgress?: (current: number, total: number, label?: string) => void } = { includeMediaBlobs: true }
+): Promise<BackupFile> {
   const [decks, cards, media, reviewLogs, appMeta] = await Promise.all([
     db.decks.toArray(),
     db.cards.toArray(),
@@ -54,6 +56,92 @@ export async function exportDatabase(): Promise<BackupFile> {
     db.reviewLogs.toArray(),
     db.appMeta.toArray()
   ]);
+
+  const total = media.length;
+  const exportedMedia: ExportMedia[] = [];
+
+  for (let i = 0; i < media.length; i++) {
+    const item = media[i];
+    const base: ExportMedia = {
+      id: item.id,
+      cardId: item.cardId,
+      deckId: item.deckId,
+      side: item.side,
+      mimeType: item.mimeType,
+      name: item.name,
+      size: item.size,
+      durationSeconds: item.durationSeconds,
+      createdAt: item.createdAt
+    };
+
+    if (options.includeMediaBlobs) {
+      base.dataUrl = await blobToDataUrl(item.blob);
+    }
+    
+    exportedMedia.push(base);
+    options.onProgress?.(i + 1, total, `Export médií (${i + 1}/${total})`);
+  }
+
+  const exportedAt = nowIso();
+
+  return {
+    version: CURRENT_SCHEMA_VERSION,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    schemaName: 'kartickoid-backup',
+    source: 'kartickoid',
+    appVersion: APP_VERSION,
+    exportDate: exportedAt,
+    exportId: createId('export'),
+    exportedAt,
+    mediaIncludesBlobs: options.includeMediaBlobs,
+    mediaStorage: options.includeMediaBlobs ? 'json-base64' : 'zip-files',
+    decks,
+    cards,
+    media: exportedMedia,
+    reviewLogs,
+    appMeta
+  };
+}
+
+export async function downloadBackup(onProgress?: (current: number, total: number, label?: string) => void): Promise<void> {
+  const backup = await exportDatabase({ includeMediaBlobs: true, onProgress });
+  const entry = await createBackupHistoryEntry(backup, 'manual');
+  await downloadBlobFile(entry.blob, entry.name);
+}
+
+export async function downloadBackupZip(
+  onProgress?: (current: number, total: number, label?: string) => void,
+  options: { skipHistory?: boolean } = {}
+): Promise<void> {
+  const { blob, name } = await createBackupZipBlob(onProgress);
+  
+  if (!options.skipHistory) {
+    try {
+        await createBackupHistoryBlobEntry(blob, name, 'manual', 'zip');
+    } catch (err) {
+        console.warn('Nepodařilo se uložit zálohu do historie (pravděpodobně příliš velký soubor), ale stahování pokračuje.', err);
+    }
+  }
+  
+  await downloadBlobFile(blob, name);
+}
+
+export async function createBackupZipFile(onProgress?: (current: number, total: number, label?: string) => void): Promise<{ blob: Blob; name: string }> {
+  return createBackupZipBlob(onProgress);
+}
+
+export async function downloadDeckBackup(deckId: EntityId, deckName: string): Promise<void> {
+  const [deck, cards, reviewLogs, appMeta] = await Promise.all([
+    db.decks.get(deckId),
+    db.cards.where('deckId').equals(deckId).toArray(),
+    db.reviewLogs.where('deckId').equals(deckId).toArray(),
+    db.appMeta.toArray()
+  ]);
+  if (!deck) throw new Error('Balíček nebyl nalezen.');
+
+  const cardIds = Array.from(new Set(cards.map((card) => card.id)));
+  // Query media using cardId index for efficiency and correctness
+  const media = await db.media.where('cardId').anyOf(cardIds).toArray();
 
   const exportedMedia: ExportMedia[] = await Promise.all(media.map(async (item) => ({
     id: item.id,
@@ -67,69 +155,6 @@ export async function exportDatabase(): Promise<BackupFile> {
     durationSeconds: item.durationSeconds,
     createdAt: item.createdAt
   })));
-
-  const exportedAt = nowIso();
-
-  return {
-    version: CURRENT_SCHEMA_VERSION,
-    schemaVersion: CURRENT_SCHEMA_VERSION,
-    schemaName: 'kartickoid-backup',
-    source: 'kartickoid',
-    appVersion: APP_VERSION,
-    exportDate: exportedAt,
-    exportId: createId('export'),
-    exportedAt,
-    mediaIncludesBlobs: true,
-    mediaStorage: 'json-base64',
-    decks,
-    cards,
-    media: exportedMedia,
-    reviewLogs,
-    appMeta
-  };
-}
-
-export async function downloadBackup(): Promise<void> {
-  const backup = await exportDatabase();
-  const entry = await createBackupHistoryEntry(backup, 'manual');
-  await downloadBlobFile(entry.blob, entry.name);
-}
-
-export async function downloadBackupZip(): Promise<void> {
-  const { blob, name } = await createBackupZipBlob();
-  const entry = await createBackupHistoryBlobEntry(blob, name, 'manual', 'zip');
-  await downloadBlobFile(entry.blob, entry.name);
-}
-
-export async function createBackupZipFile(): Promise<{ blob: Blob; name: string }> {
-  return createBackupZipBlob();
-}
-
-export async function downloadDeckBackup(deckId: EntityId, deckName: string): Promise<void> {
-  const [deck, cards, media, reviewLogs, appMeta] = await Promise.all([
-    db.decks.get(deckId),
-    db.cards.where('deckId').equals(deckId).toArray(),
-    db.media.toArray(),
-    db.reviewLogs.where('deckId').equals(deckId).toArray(),
-    db.appMeta.toArray()
-  ]);
-  if (!deck) throw new Error('Balíček nebyl nalezen.');
-
-  const cardIds = new Set(cards.map((card) => card.id));
-  const exportedMedia: ExportMedia[] = await Promise.all(media
-    .filter((item) => cardIds.has(item.cardId))
-    .map(async (item) => ({
-      id: item.id,
-      cardId: item.cardId,
-      deckId: item.deckId,
-      side: item.side,
-      dataUrl: await blobToDataUrl(item.blob),
-      mimeType: item.mimeType,
-      name: item.name,
-      size: item.size,
-      durationSeconds: item.durationSeconds,
-      createdAt: item.createdAt
-    })));
 
   const exportedAt = nowIso();
   const backup: BackupFile = {
@@ -193,7 +218,7 @@ export function formatImportSummary(result: ImportBackupSummary): string {
     `Historie/statistiky: +${result.reviewLogsAdded}, přeskočeno ${result.reviewLogsSkipped}.`,
     `Nastavení: +${result.settingsAdded}, aktualizováno ${result.settingsUpdated}, přeskočeno ${result.settingsSkipped}.`,
     `Konflikty: ${result.conflicts}, nalezené duplicity: ${result.duplicates}, přegenerovaná ID: ${result.regeneratedIds}.`,
-    result.safetySnapshotCreated ? 'Před obnovou byl stažen bezpečnostní snapshot.' : ''
+    result.safetySnapshotCreated ? 'Před obnovou byl uložen bezpečnostní snapshot do historie záloh.' : ''
   ].filter(Boolean).join(' ');
 }
 
@@ -434,9 +459,8 @@ async function resetImport(parsed: ParsedBackup, createSafetySnapshot: boolean):
   const summary = createSummary('reset', true);
 
   if (createSafetySnapshot) {
-    const backup = await exportDatabase();
-    const entry = await createBackupHistoryEntry(backup, 'reset-safety');
-    await downloadBlobFile(entry.blob, entry.name);
+    const { blob, name } = await createBackupZipBlob();
+    await createBackupHistoryBlobEntry(blob, name, 'reset-safety', 'zip');
     summary.safetySnapshotCreated = true;
   }
 
@@ -514,12 +538,12 @@ async function readBackupZip(blob: Blob): Promise<ParsedBackup> {
     const mediaBlob = await mediaEntry.async('blob');
     return {
       ...item,
-      dataUrl: await blobToDataUrl(mediaBlob),
+      blob: mediaBlob,
       size: item.size ?? mediaBlob.size
     };
   }));
 
-  return validateBackup({ ...backup, media });
+  return validateBackup({ ...backup, media: media as any });
 }
 
 function readBackupText(text: string): ParsedBackup {
@@ -572,8 +596,8 @@ function validateBackup(value: BackupFile): ParsedBackup {
 
   const media = value.media.map((item) => ({ ...item, id: item.id || createId('media') }));
 
-  media.forEach((item) => {
-    if (!item.cardId || !item.deckId || !item.dataUrl || !item.mimeType) {
+  media.forEach((item: any) => {
+    if (!item.cardId || !item.deckId || (!item.dataUrl && !item.blob) || !item.mimeType) {
       throw new Error('Záloha obsahuje neplatné médium.');
     }
     if (!cardIds.has(item.cardId) || !deckIds.has(item.deckId)) {
@@ -585,7 +609,11 @@ function validateBackup(value: BackupFile): ParsedBackup {
 
   cards.forEach((card) => {
     const missingMedia = (card.imageIds ?? []).some((id) => !mediaIds.has(id));
-    if (missingMedia) throw new Error('Záloha obsahuje kartičku s odkazem na chybějící médium.');
+    // For segmented backups (zip-files), missing media in one part is expected.
+    // We only log a warning to console instead of blocking the entire import.
+    if (missingMedia && value.mediaStorage !== 'zip-files') {
+        console.warn(`Kartička ${card.id} odkazuje na chybějící médium. U rozdělené zálohy je to v pořádku.`);
+    }
   });
 
   const reviewLogs = value.reviewLogs.map((log) => ({ ...log, id: log.id || createId('log') }));
@@ -614,8 +642,8 @@ function validateBackup(value: BackupFile): ParsedBackup {
   };
 }
 
-function toMedia(item: ExportMedia, cardId: EntityId, deckId: EntityId, id: EntityId): Media {
-  if (!item.dataUrl) {
+function toMedia(item: ExportMedia & { blob?: Blob }, cardId: EntityId, deckId: EntityId, id: EntityId): Media {
+  if (!item.dataUrl && !item.blob) {
     throw new Error('Záloha obsahuje médium bez dat.');
   }
 
@@ -625,7 +653,7 @@ function toMedia(item: ExportMedia, cardId: EntityId, deckId: EntityId, id: Enti
     deckId,
     side: item.side,
     type: item.mimeType.startsWith('audio/') ? 'audio' : 'image',
-    blob: dataUrlToBlob(item.dataUrl),
+    blob: item.blob || dataUrlToBlob(item.dataUrl!),
     mimeType: item.mimeType,
     name: item.name,
     size: item.size,
@@ -781,24 +809,81 @@ async function createBackupHistoryBlobEntry(
   return entry;
 }
 
-async function createBackupZipBlob(): Promise<{ blob: Blob; name: string }> {
-  const backup = await exportDatabase();
+async function createBackupZipBlob(onProgress?: (current: number, total: number, label?: string) => void): Promise<{ blob: Blob; name: string }> {
+  const [decks, cards, reviewLogs, appMeta, mediaCount] = await Promise.all([
+    db.decks.toArray(),
+    db.cards.toArray(),
+    db.reviewLogs.toArray(),
+    db.appMeta.toArray(),
+    db.media.count()
+  ]);
+
   const zip = new JSZip();
+  const exportedMedia: ExportMedia[] = [];
+  let currentCount = 0;
 
-  await Promise.all(backup.media.map(async (item) => {
-    if (!item.dataUrl) return;
-    const mediaBlob = dataUrlToBlob(item.dataUrl);
+  // Phase 1: Gathering media (0-70% of total progress)
+  await db.media.each((item) => {
     const filePath = `media/${mediaFileName(item)}`;
-    zip.file(filePath, mediaBlob);
-    item.filePath = filePath;
-    delete item.dataUrl;
-  }));
+    zip.file(filePath, item.blob);
+    exportedMedia.push({
+      id: item.id,
+      cardId: item.cardId,
+      deckId: item.deckId,
+      side: item.side,
+      filePath,
+      mimeType: item.mimeType,
+      name: item.name,
+      size: item.size,
+      durationSeconds: item.durationSeconds,
+      createdAt: item.createdAt
+    });
+    currentCount++;
+    if (onProgress) {
+        // Report gathering as 0-70%
+        const gatheringProgress = Math.round((currentCount / Math.max(1, mediaCount)) * 70);
+        onProgress(gatheringProgress, 100, `Příprava médií (${currentCount}/${mediaCount})`);
+    }
+  });
 
-  backup.mediaIncludesBlobs = false;
-  backup.mediaStorage = 'zip-files';
+  const exportedAt = nowIso();
+  const backup: BackupFile = {
+    version: CURRENT_SCHEMA_VERSION,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    schemaName: 'kartickoid-backup',
+    source: 'kartickoid',
+    appVersion: APP_VERSION,
+    exportDate: exportedAt,
+    exportId: createId('export'),
+    exportedAt,
+    mediaIncludesBlobs: false,
+    mediaStorage: 'zip-files',
+    decks,
+    cards,
+    media: exportedMedia,
+    reviewLogs,
+    appMeta
+  };
+
   zip.file('backup.json', JSON.stringify(backup, null, 2));
 
-  const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/zip' });
+  // Phase 2: Generating ZIP (70-100% of total progress)
+  // Using compression: 'STORE' is MUCH faster and saves memory because images/audio are already compressed.
+  const blob = await zip.generateAsync(
+    { 
+      type: 'blob', 
+      mimeType: 'application/zip',
+      compression: 'STORE',
+      streamFiles: true
+    },
+    (metadata) => {
+      if (onProgress) {
+        const generationProgress = 70 + Math.round(metadata.percent * 0.3);
+        onProgress(generationProgress, 100, `Vytvářím archiv (${Math.round(metadata.percent)}%)`);
+      }
+    }
+  );
+
   const createdAt = nowIso();
   return {
     blob,
@@ -840,4 +925,85 @@ async function trimBackupHistory(): Promise<void> {
   if (expired.length > 0) {
     await db.backups.bulkDelete(expired.map((entry) => entry.id));
   }
+}
+
+export async function downloadBackupZipPart(
+  mediaSubset: Media[],
+  partIndex: number,
+  totalParts: number,
+  onProgress?: (current: number, total: number, label?: string) => void
+): Promise<void> {
+  const [decks, cards, reviewLogs, appMeta] = await Promise.all([
+    db.decks.toArray(),
+    db.cards.toArray(),
+    db.reviewLogs.toArray(),
+    db.appMeta.toArray()
+  ]);
+
+  const zip = new JSZip();
+  const exportedMedia: ExportMedia[] = [];
+  const mediaCount = mediaSubset.length;
+
+  for (let i = 0; i < mediaSubset.length; i++) {
+    const item = mediaSubset[i];
+    const filePath = `media/${mediaFileName(item)}`;
+    zip.file(filePath, item.blob);
+    exportedMedia.push({
+      id: item.id,
+      cardId: item.cardId,
+      deckId: item.deckId,
+      side: item.side,
+      filePath,
+      mimeType: item.mimeType,
+      name: item.name,
+      size: item.size,
+      durationSeconds: item.durationSeconds,
+      createdAt: item.createdAt
+    });
+    
+    if (onProgress) {
+        const gatheringProgress = Math.round(((i + 1) / Math.max(1, mediaCount)) * 70);
+        onProgress(gatheringProgress, 100, `Příprava médií dílu ${partIndex}/${totalParts} (${i + 1}/${mediaCount})`);
+    }
+  }
+
+  const exportedAt = nowIso();
+  const backup: BackupFile = {
+    version: CURRENT_SCHEMA_VERSION,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    schemaName: 'kartickoid-backup',
+    source: 'kartickoid',
+    appVersion: APP_VERSION,
+    exportDate: exportedAt,
+    exportId: createId('export'),
+    exportedAt,
+    mediaIncludesBlobs: false,
+    mediaStorage: 'zip-files',
+    decks,
+    cards,
+    media: exportedMedia,
+    reviewLogs,
+    appMeta
+  };
+
+  zip.file('backup.json', JSON.stringify(backup, null, 2));
+
+  const blob = await zip.generateAsync(
+    { 
+      type: 'blob', 
+      mimeType: 'application/zip',
+      compression: 'STORE',
+      streamFiles: true
+    },
+    (metadata) => {
+      if (onProgress) {
+        const generationProgress = 70 + Math.round(metadata.percent * 0.3);
+        onProgress(generationProgress, 100, `Vytvářím archiv dílu ${partIndex}/${totalParts} (${Math.round(metadata.percent)}%)`);
+      }
+    }
+  );
+
+  const createdAt = nowIso();
+  const filename = `kartickoid-zaloha-${createdAt.slice(0, 10)}-part${partIndex}-of-${totalParts}.zip`;
+  await downloadBlobFile(blob, filename);
 }

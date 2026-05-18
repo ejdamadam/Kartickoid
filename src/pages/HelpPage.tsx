@@ -132,6 +132,16 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
         </section>
 
         <section className="panel">
+          <h2>Řešení problémů při exportu (iPhone a velké knihovny)</h2>
+          <p>U velmi velkých knihoven (stovky megabajtů) se může stát, že prohlížeč (zejména na iPhone) při vytváření ZIP zálohy zkolabuje kvůli nedostatku operační paměti.</p>
+          <ul>
+            <li><strong>Rozdělený export:</strong> v Nastavení najdete volbu pro rozdělení exportu na více menších souborů. Zvolte počet médií v jednom dílu (např. 50) a stáhněte si díly jeden po druhém.</li>
+            <li><strong>Import dílů:</strong> stažené části pak na novém zařízení nahrajte jednu po druhé pomocí <strong>Soft importu</strong>. První díl vytvoří strukturu a nahraje část fotek, další díly pak postupně doplní zbytek.</li>
+            <li><strong>Export balíčku:</strong> pokud padá celková záloha, můžete také zkusit exportovat balíčky jeden po druhém přímo z jejich detailu nebo seznamu.</li>
+          </ul>
+        </section>
+
+        <section className="panel">
           <h2>Dark mode</h2>
           <p>Tmavý režim zapnete v Nastavení. Preference se ukládá lokálně, takže aplikace si ji zapamatuje i po zavření. Základ je tmavě modrý/slate, ale akcenty respektují vybranou barvu aplikace podobně jako ve světlém režimu.</p>
         </section>

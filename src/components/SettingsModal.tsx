@@ -10,6 +10,7 @@ import {
   downloadBackup,
   downloadBackupHistoryEntry,
   downloadBackupZip,
+  downloadBackupZipPart,
   formatImportSummary,
   getBackupHistory,
   importBackupFile,
@@ -28,7 +29,7 @@ import {
   type OneDriveBackupItem,
   type OneDriveSettings
 } from '../services/oneDriveSync';
-import type { BackupHistoryEntry } from '../types';
+import type { BackupHistoryEntry, Media } from '../types';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -90,13 +91,24 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [oneDriveClientId, setOneDriveClientId] = useState('');
   const [oneDriveBackups, setOneDriveBackups] = useState<OneDriveBackupItem[]>([]);
   const [oneDriveBusy, setOneDriveBusy] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
+  const [exportLabel, setExportLabel] = useState<string>('');
+  const [skipHistoryForLargeZip, setSkipHistoryForLargeLargeZip] = useState(true);
+  const [mediaPerPart, setMediaPerPart] = useState(100);
+  const [segmentedParts, setSegmentedParts] = useState<Media[][] | null>(null);
 
   useEffect(() => {
     db.appMeta.get('backupInterval').then(m => m && setInterval(Number(m.value)));
+    db.appMeta.get('mediaPerPart').then(m => m && setMediaPerPart(Number(m.value)));
     void loadBackupHistory();
     void loadStorageOverview();
     void loadOneDriveState();
   }, []);
+
+  async function updateMediaPerPart(value: number) {
+    setMediaPerPart(value);
+    await db.appMeta.put({ key: 'mediaPerPart', value, updatedAt: nowIso() });
+  }
 
   async function loadBackupHistory() {
     setBackupHistory(await getBackupHistory());
@@ -219,7 +231,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     }
 
     if (mode === 'reset') {
-      const ok = window.confirm('Tento krok smaže aktuální lokální data a nahradí je obsahem zálohy. Před obnovou se stáhne bezpečnostní snapshot aktuálního stavu. Pokračovat?');
+      const ok = window.confirm('Tento krok smaže aktuální lokální data a nahradí je obsahem zálohy. Před obnovou se uloží bezpečnostní snapshot do historie záloh bez stahování souboru. Pokračovat?');
       if (!ok) return;
     }
 
@@ -239,26 +251,85 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   async function handleDownloadBackup() {
     setSettingsError(undefined);
     setSettingsMessage(undefined);
+    setExportProgress(null);
+    setExportLabel('');
     try {
-      await downloadBackup();
+      await downloadBackup((current, total, label) => {
+          setExportProgress({ current, total });
+          if (label) setExportLabel(label);
+      });
       setSettingsMessage('JSON záloha byla vytvořena a uložena do historie.');
       await loadBackupHistory();
       await loadStorageOverview();
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : 'Export zálohy se nepodařil.');
+    } finally {
+      setExportProgress(null);
+      setExportLabel('');
     }
   }
 
   async function handleDownloadZipBackup() {
     setSettingsError(undefined);
     setSettingsMessage(undefined);
+    setExportProgress(null);
+    setExportLabel('');
     try {
-      await downloadBackupZip();
-      setSettingsMessage('ZIP záloha byla vytvořena a uložena do historie. Média jsou uložená jako samostatné soubory.');
+      await downloadBackupZip(
+        (current, total, label) => {
+          setExportProgress({ current, total });
+          if (label) setExportLabel(label);
+        },
+        { skipHistory: skipHistoryForLargeZip }
+      );
+      setSettingsMessage(`ZIP záloha byla vytvořena${skipHistoryForLargeZip ? '' : ' a uložena do historie'}. Média jsou uložená jako samostatné soubory.`);
       await loadBackupHistory();
       await loadStorageOverview();
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : 'Export ZIP zálohy se nepodařil.');
+    } finally {
+      setExportProgress(null);
+      setExportLabel('');
+    }
+  }
+
+  async function handlePrepareSegmentedExport() {
+    setSettingsError(undefined);
+    setSegmentedParts(null);
+    try {
+      const allMedia = await db.media.toArray();
+      const parts: Media[][] = [];
+      for (let i = 0; i < allMedia.length; i += mediaPerPart) {
+        parts.push(allMedia.slice(i, i + mediaPerPart));
+      }
+      if (parts.length === 0) {
+          parts.push([]); // At least one part for structure even if no media
+      }
+      setSegmentedParts(parts);
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Příprava rozděleného exportu selhala.');
+    }
+  }
+
+  async function handleDownloadPart(index: number) {
+    if (!segmentedParts) return;
+    setExportProgress(null);
+    setExportLabel('');
+    try {
+      await downloadBackupZipPart(
+        segmentedParts[index],
+        index + 1,
+        segmentedParts.length,
+        (current, total, label) => {
+          setExportProgress({ current, total });
+          if (label) setExportLabel(label);
+        }
+      );
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : `Export dílu ${index + 1} selhal.`);
+    } finally {
+      setExportProgress(null);
+      setExportLabel('');
     }
   }
 
@@ -334,8 +405,13 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     setOneDriveBusy(true);
     setSettingsError(undefined);
     setSettingsMessage(undefined);
+    setExportProgress(null);
+    setExportLabel('');
     try {
-      const file = await createBackupZipFile();
+      const file = await createBackupZipFile((current, total, label) => {
+          setExportProgress({ current, total });
+          if (label) setExportLabel(label);
+      });
       await uploadOneDriveBackup(file.blob, file.name);
       setSettingsMessage(`ZIP záloha ${file.name} byla nahrána na OneDrive.`);
       await loadOneDriveState();
@@ -343,6 +419,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       setSettingsError(err instanceof Error ? err.message : 'Upload zálohy na OneDrive se nepodařil.');
     } finally {
       setOneDriveBusy(false);
+      setExportProgress(null);
+      setExportLabel('');
     }
   }
 
@@ -500,10 +578,57 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         
         <h3>Záloha a import</h3>
         <p className="muted">ZIP je doporučená kompletní záloha: obsahuje backup.json a média jako samostatné soubory. JSON ponechte hlavně pro pokročilou kontrolu nebo starší workflow.</p>
+        
+        <label className="checkbox-row" style={{ marginBottom: '0.5rem' }}>
+          <input
+            type="checkbox"
+            checked={skipHistoryForLargeZip}
+            onChange={(event) => setSkipHistoryForLargeLargeZip(event.target.checked)}
+          />
+          Při exportu ZIPu neukládat kopii do vnitřní historie záloh (bezpečnější pro iPhone a velké knihovny)
+        </label>
+        
+        {exportProgress && (
+          <div className="preview-row" style={{ gap: '0.8rem', marginBottom: '1rem' }}>
+             <strong>{exportLabel || 'Exportuji data...'}</strong>
+             <div className="progress-track">
+                <span style={{ width: `${(exportProgress.current / exportProgress.total) * 100}%` }} />
+             </div>
+             <small className="muted">{exportProgress.current === exportProgress.total && exportProgress.total === 100 ? '100%' : `${exportProgress.current} / ${exportProgress.total}`}</small>
+          </div>
+        )}
+
         <div className="button-row">
-          <button className="primary-button" type="button" onClick={handleDownloadZipBackup}>Exportovat ZIP zálohu</button>
-          <button className="secondary-button" type="button" onClick={handleDownloadBackup}>Exportovat JSON</button>
+          <button className="primary-button" type="button" onClick={handleDownloadZipBackup} disabled={exportProgress !== null}>Exportovat ZIP zálohu</button>
+          <button className="secondary-button" type="button" onClick={handleDownloadBackup} disabled={exportProgress !== null}>Exportovat JSON</button>
         </div>
+
+        <details className="panel onedrive-collapsible" style={{ background: 'rgba(233, 228, 216, 0.2)' }}>
+           <summary className="section-title">
+             <h3>Rozdělený export (pro iPhone / velké knihovny)</h3>
+             <span>volitelné</span>
+           </summary>
+           <p className="muted">Pokud aplikace při exportu padá (časté na iPhone), rozdělte zálohu na více menších souborů. Každý díl bude obsahovat část vašich obrázků a zvuků. Při obnově pak postupně nahrajte všechny stažené ZIPy pomocí "Soft importu".</p>
+           <label>
+             Počet médií v jednom dílu
+             <input type="number" value={mediaPerPart} onChange={e => updateMediaPerPart(Number(e.target.value))} min="10" max="500" />
+           </label>
+           <div className="button-row">
+             <button className="secondary-button" type="button" onClick={handlePrepareSegmentedExport}>Připravit díly k exportu</button>
+           </div>
+           
+           {segmentedParts && (
+             <div className="backup-history-list" style={{ marginTop: '1rem' }}>
+               <p><strong>Připraveno {segmentedParts.length} dílů.</strong> Klikněte postupně na všechna tlačítka níže:</p>
+               {segmentedParts.map((_, idx) => (
+                 <div key={idx} className="backup-history-row">
+                   <span>Díl {idx + 1} z {segmentedParts.length}</span>
+                   <button className="primary-button tiny-button" onClick={() => handleDownloadPart(idx)} disabled={exportProgress !== null}>Stáhnout díl {idx + 1}</button>
+                 </div>
+               ))}
+             </div>
+           )}
+        </details>
 
         <details className="onedrive-panel onedrive-collapsible">
           <summary className="section-title">
@@ -550,11 +675,21 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 {oneDriveSettings.lastBackupAt ? ` Poslední upload: ${formatDateTime(oneDriveSettings.lastBackupAt)}.` : ''}
               </p>
               <div className="button-row">
-                <button className="primary-button" type="button" onClick={handleUploadOneDriveBackup} disabled={oneDriveBusy}>
+                <button className="primary-button" type="button" onClick={handleUploadOneDriveBackup} disabled={oneDriveBusy || exportProgress !== null}>
                   {oneDriveBusy ? 'Pracuji…' : 'Nahrát ZIP zálohu na OneDrive'}
                 </button>
                 <button className="secondary-button" type="button" onClick={handleRefreshOneDriveBackups} disabled={oneDriveBusy}>Načíst cloudové zálohy</button>
               </div>
+
+              {exportProgress && (
+                <div className="preview-row" style={{ gap: '0.8rem', marginTop: '0.5rem' }}>
+                  <strong>{exportLabel || 'Příprava zálohy...'}</strong>
+                  <div className="progress-track">
+                      <span style={{ width: `${(exportProgress.current / exportProgress.total) * 100}%` }} />
+                  </div>
+                  <small className="muted">{exportProgress.current === exportProgress.total && exportProgress.total === 100 ? '100%' : `${exportProgress.current} / ${exportProgress.total}`}</small>
+                </div>
+              )}
               <div className="backup-history-list">
                 {oneDriveBackups.length === 0 ? (
                   <p className="muted">Zatím tu není žádná OneDrive záloha načtená z aplikační složky.</p>
