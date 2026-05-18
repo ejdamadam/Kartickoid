@@ -505,15 +505,15 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           <button className="secondary-button" type="button" onClick={handleDownloadBackup}>Exportovat JSON</button>
         </div>
 
-        <section className="onedrive-panel">
-          <div className="section-title">
+        <details className="onedrive-panel onedrive-collapsible">
+          <summary className="section-title">
             <h3>OneDrive zálohy</h3>
-            <span>{oneDriveSettings?.connected ? 'připojeno' : 'experimentální'}</span>
-          </div>
+            <span>{oneDriveSettings?.connected ? 'připojeno · experimentální' : 'experimentální'}</span>
+          </summary>
           <p className="muted">
             OneDrive je experimentální funkce a nemusí být plně stabilní ve všech prohlížečích nebo účtech. Zálohování používá aplikační složku Kartičkoid v OneDrive a vyžaduje vlastní Microsoft Entra Application (client) ID se scope Files.ReadWrite.AppFolder a redirect URI této aplikace.
           </p>
-          <details className="settings-help-box" open={!oneDriveSettings?.clientId}>
+          <details className="settings-help-box">
             <summary>Jak OneDrive zprovoznit</summary>
             <ol>
               <li>Otevřete Microsoft Entra admin center a vytvořte novou registraci aplikace.</li>
@@ -574,7 +574,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               </div>
             </>
           )}
-        </section>
+        </details>
 
         <section className="backup-history-list">
           <div className="section-title">

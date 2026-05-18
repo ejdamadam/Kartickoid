@@ -55,7 +55,7 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
           <p>V detailu balíčku vidíte přední a zadní stranu každé kartičky odděleně. Delší texty zůstávají čitelné, karty můžete upravit, smazat, prohodit strany nebo doplnit média.</p>
           <ul>
             <li><strong>Hvězdička:</strong> označuje důležité, problematické nebo zkouškově klíčové kartičky. Zapnete ji v přehledu i přímo při procvičování.</li>
-            <li><strong>Filtr hvězdiček:</strong> v přehledu můžete zobrazit všechny kartičky, pouze označené nebo pouze neoznačené.</li>
+            <li><strong>Filtr hvězdiček:</strong> v přehledu je malé hvězdičkové tlačítko. Prázdná hvězdička znamená všechny kartičky, zlatá pouze označené a škrtnutá kartičky bez hvězdičky. Klepnutím se režimy cyklicky střídají.</li>
             <li><strong>Hledání:</strong> prohledává text na obou stranách a tagy.</li>
             <li><strong>Tagy:</strong> klikáním na tagy rychle zúžíte balíček na konkrétní téma.</li>
           </ul>
@@ -63,7 +63,7 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
 
         <section className="panel">
           <h2>Procvičování swipem</h2>
-          <p>Procvičování je hlavní režim pro učení. Kartičku otočíte klepnutím. Hodnocení obtížnosti se dělá gestem, ne tlačítky pod kartou, aby obrazovka zůstala čistá i na malém telefonu.</p>
+          <p>Procvičování je hlavní režim pro učení. Kartičku otočíte klepnutím. Hodnocení obtížnosti se dělá gestem, ne tlačítky pod kartou, aby obrazovka zůstala čistá i na malém telefonu. Krátká nápověda ke směrům swipu se zobrazí jen u první kartičky v průchodu.</p>
           <ul>
             <li><strong>Doprava:</strong> Dobré - odpověď jste zvládli.</li>
             <li><strong>Doleva:</strong> Znovu - odpověď nevyšla a karta se má brzy vrátit.</li>
@@ -72,6 +72,8 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
             <li><strong>Zpět na předchozí kartu:</strong> použijte malou šipku přímo na kartičce.</li>
             <li><strong>Hvězdička při učení:</strong> hvězdičkou si kartu označíte bez opuštění průchodu.</li>
           </ul>
+          <p>Delší kartičky se na telefonu čtou scrollováním uvnitř kartičky. Tělo karty zůstává ve velikosti, která se vejde na displej, a text začíná odshora na přední i zadní straně.</p>
+          <p>Po dokončení průchodu můžete zvolit <strong>Zopakovat stejné kartičky</strong>, což spustí právě dokončený výběr znovu, nebo <strong>Nový průchod</strong> podle aktuálních voleb, který znovu načte kartičky ze zdroje.</p>
           <p className="muted">Tip: Snadné používejte střídmě. Pokud jste dlouho přemýšleli, je přesnější Dobré nebo Těžké.</p>
         </section>
 
@@ -87,7 +89,7 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
 
         <section className="panel">
           <h2>Match mód</h2>
-          <p>Match je samostatný režim mimo klasické procvičování. Na levé straně jsou pojmy nebo otázky, na pravé straně promíchané odpovědi. Vyberete jednu položku vlevo a potom odpověď vpravo.</p>
+          <p>Match je samostatný režim mimo klasické procvičování. Neodděluje pojmy a odpovědi do sloupců: všechny části dvojic jsou zamíchané dohromady na jedné ploše. Vyberete libovolné dvě související kartičky.</p>
           <ul>
             <li><strong>Správná dvojice:</strong> obě položky zmizí ze hry a plocha se postupně čistí.</li>
             <li><strong>Špatná dvojice:</strong> položky krátce signalizují chybu a zůstávají ve hře.</li>
@@ -116,10 +118,13 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
 
         <section className="panel">
           <h2>Export a import</h2>
-          <p>Protože jsou data uložená lokálně v prohlížeči, záloha je zásadní. Nejbezpečnější běžný postup je pravidelně stáhnout ZIP zálohu a uložit ji mimo prohlížeč, například do souborů, iCloudu, OneDrivu nebo na disk.</p>
+          <p>Protože jsou data uložená lokálně v prohlížeči, záloha je zásadní. Nejbezpečnější běžný postup je pravidelně stáhnout ZIP zálohu a uložit ji mimo prohlížeč, například do souborů, iCloudu, OneDrivu nebo na disk. Zálohujte hlavně před větším importem, mazáním nebo přesunem na jiné zařízení.</p>
           <ul>
             <li><strong>ZIP záloha:</strong> doporučená a lepší varianta pro kompletní zálohu celé sady. Je vhodnější pro běžné uživatele, protože obsahuje databázový <code>backup.json</code>, související data a případné přílohy jako samostatné soubory.</li>
             <li><strong>JSON export:</strong> původní/starší forma exportu. Zůstává dostupná jako jednodušší nebo pokročilejší technická varianta v jednom souboru, ale pro kompletní zálohu celé aplikace používejte raději ZIP.</li>
+            <li><strong>Soft import:</strong> sloučí zálohu s aktuálními daty a snaží se nepřidávat duplicity. Hodí se pro běžné doplnění dat.</li>
+            <li><strong>Hard import:</strong> přidá celý obsah zálohy k aktuálním datům a může vytvořit duplicity. Používejte ho jen tehdy, když víte proč.</li>
+            <li><strong>Reset / obnova:</strong> nahradí aktuální lokální data obsahem zálohy. Aplikace před tím vytvoří bezpečnostní snapshot.</li>
             <li><strong>CSV:</strong> hodí se pro tabulky a jednoduchý přenos textových kartiček.</li>
             <li><strong>Markdown:</strong> je užitečný pro strukturované poznámky.</li>
             <li><strong>Anki ZIP:</strong> slouží pro import balíčku z Anki včetně mediálních souborů, pokud jsou v exportu dostupné.</li>
@@ -128,12 +133,12 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
 
         <section className="panel">
           <h2>Dark mode</h2>
-          <p>Tmavý režim zapnete v Nastavení. Preference se ukládá lokálně, takže aplikace si ji zapamatuje i po zavření. Tmavý režim je určený hlavně pro večerní učení, menší únavu očí a lepší čitelnost v tmavém prostředí.</p>
+          <p>Tmavý režim zapnete v Nastavení. Preference se ukládá lokálně, takže aplikace si ji zapamatuje i po zavření. Základ je tmavě modrý/slate, ale akcenty respektují vybranou barvu aplikace podobně jako ve světlém režimu.</p>
         </section>
 
         <section className="panel">
           <h2>OneDrive</h2>
-          <p>OneDrive je experimentální funkce pro doplňkové cloudové zálohování. Může pomoct, ale nemusí být plně stabilní ani vhodná jako jediná kopie dat. Pro jistou obnovu používejte pravidelně ZIP zálohu.</p>
+          <p>OneDrive je experimentální funkce pro doplňkové cloudové zálohování. V Nastavení je ve výchozím stavu sbalená, aby nepřekážela běžným volbám. Může pomoct, ale nemusí být plně stabilní ani vhodná jako jediná kopie dat. Pro jistou obnovu používejte pravidelně ZIP zálohu.</p>
         </section>
 
         <section className="panel">

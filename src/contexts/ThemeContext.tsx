@@ -112,12 +112,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
 
     const palette = colorMode === 'dark'
-      ? { primary: '#e8eef8', bg: '#0f172a' }
-      : { primary: theme.primary, bg: theme.bg };
+      ? { primary: '#e8eef8', bg: '#0f172a', accent: createDarkAccent(theme.primary) }
+      : { primary: theme.primary, bg: theme.bg, accent: theme.primary };
     document.documentElement.style.setProperty('--primary-color', palette.primary);
     document.documentElement.style.setProperty('--primary-rgb', hexToRgb(palette.primary));
     document.documentElement.style.setProperty('--bg-color', palette.bg);
     document.documentElement.style.setProperty('--bg-rgb', hexToRgb(palette.bg));
+    document.documentElement.style.setProperty('--accent-color', palette.accent);
+    document.documentElement.style.setProperty('--accent-rgb', hexToRgb(palette.accent));
   }, [theme, colorMode]);
 
   useEffect(() => {
@@ -189,4 +191,15 @@ function isCustomBackground(value: unknown): value is CustomBackground {
     && candidate.dataUrl.startsWith('data:image/')
     && typeof candidate.name === 'string'
     && typeof candidate.updatedAt === 'string';
+}
+
+function createDarkAccent(hex: string): string {
+  const normalized = /^#[0-9a-f]{6}$/i.test(hex) ? hex : defaultTheme.primary;
+  const r = parseInt(normalized.slice(1, 3), 16);
+  const g = parseInt(normalized.slice(3, 5), 16);
+  const b = parseInt(normalized.slice(5, 7), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  const mix = luminance < 0.42 ? 0.52 : 0.28;
+  const next = [r, g, b].map((channel) => Math.round(channel + (255 - channel) * mix));
+  return `#${next.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 }

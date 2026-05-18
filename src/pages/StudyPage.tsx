@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { animate, motion, useMotionValue, useTransform, type PanInfo, AnimatePresence } from 'framer-motion';
 import RichTextDisplay from '../components/RichTextDisplay';
 import CardMediaList from '../components/CardMediaList';
@@ -155,6 +155,14 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
     setRevealed(false);
   }
 
+  function repeatSameCards() {
+    setQueue((cards) => order === 'random' ? shuffle(cards) : cards);
+    setIndex(0);
+    setCompleted(0);
+    setPreviousCards([]);
+    setRevealed(false);
+  }
+
   function goPreviousCard() {
     const previous = previousCards.at(-1);
     if (!previous || index <= 0) return;
@@ -220,6 +228,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
               order={order}
               setOrder={setOrder}
               onBack={onBack}
+              onRepeatSame={repeatSameCards}
               onStart={startSession}
               onRetryMistakes={retryMistakes}
             />
@@ -237,6 +246,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
                 card={currentCard}
                 media={currentMedia}
                 revealed={revealed}
+                showHint={index === 0 && completed === 0}
                 onFlip={() => setRevealed((value) => !value)}
                 onRate={rate}
                 onPrevious={goPreviousCard}
@@ -268,10 +278,11 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   );
 }
 
-function LearningCard({ card, media, revealed, onFlip, onRate, onPrevious, canGoPrevious, onToggleStarred }: {
+function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevious, canGoPrevious, onToggleStarred }: {
   card: Card;
   media: Media[];
   revealed: boolean;
+  showHint: boolean;
   onFlip: () => void;
   onRate: (rating: Rating) => void;
   onPrevious: () => void;
@@ -286,13 +297,28 @@ function LearningCard({ card, media, revealed, onFlip, onRate, onPrevious, canGo
   const easyOpacity = useTransform(y, [-100, -18], [1, 0]);
   const hardOpacity = useTransform(y, [18, 100], [0, 1]);
   const [isDismissing, setIsDismissing] = useState(false);
+  const frontScrollRef = useRef<HTMLDivElement>(null);
+  const backScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsDismissing(false);
+    x.set(0);
+    y.set(0);
+    frontScrollRef.current?.scrollTo({ top: 0, left: 0 });
+    backScrollRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [card.id, x, y]);
+
+  useEffect(() => {
+    const activeScroll = revealed ? backScrollRef.current : frontScrollRef.current;
+    activeScroll?.scrollTo({ top: 0, left: 0 });
+  }, [revealed]);
 
   async function dismissCard(rating: Rating, target: { x: number; y: number }) {
     if (isDismissing) return;
     setIsDismissing(true);
     await Promise.all([
-      animate(x, target.x, { type: 'spring', stiffness: 260, damping: 28 }).finished,
-      animate(y, target.y, { type: 'spring', stiffness: 260, damping: 28 }).finished
+      animate(x, target.x, { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }).finished,
+      animate(y, target.y, { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }).finished
     ]);
     onRate(rating);
   }
@@ -306,7 +332,7 @@ function LearningCard({ card, media, revealed, onFlip, onRate, onPrevious, canGo
 
     if (horizontal && forceX > 120) {
       void dismissCard(offset.x > 0 ? 'good' : 'again', {
-        x: offset.x > 0 ? throwDistance : -throwDistance,
+        x: offset.x > 0 ? throwDistance * 0.9 : -throwDistance * 0.9,
         y: offset.y * 0.35
       });
       return;
@@ -314,7 +340,7 @@ function LearningCard({ card, media, revealed, onFlip, onRate, onPrevious, canGo
     if (!horizontal && forceY > 120) {
       void dismissCard(offset.y < 0 ? 'easy' : 'hard', {
         x: offset.x * 0.35,
-        y: offset.y < 0 ? -throwDistance : throwDistance
+        y: offset.y < 0 ? -throwDistance * 0.9 : throwDistance * 0.9
       });
     }
   }
@@ -358,8 +384,10 @@ function LearningCard({ card, media, revealed, onFlip, onRate, onPrevious, canGo
             />
             <div className="review-side centered">
               <p className="side-label">{t.deck.frontSide}</p>
-              <div className="review-text"><RichTextDisplay content={card.frontText} /></div>
-              <CardMediaList media={media} side="front" hideMeta />
+              <div className="review-scroll" ref={frontScrollRef}>
+                <div className="review-text"><RichTextDisplay content={card.frontText} /></div>
+                <CardMediaList media={media} side="front" hideMeta />
+              </div>
             </div>
           </div>
           <div className="flip-card-face flip-card-back">
@@ -371,13 +399,15 @@ function LearningCard({ card, media, revealed, onFlip, onRate, onPrevious, canGo
             />
             <div className="review-side centered">
               <p className="side-label">{t.deck.backSide}</p>
-              <div className="review-text"><RichTextDisplay content={card.backText} /></div>
-              <CardMediaList media={media} side="back" hideMeta />
+              <div className="review-scroll" ref={backScrollRef}>
+                <div className="review-text"><RichTextDisplay content={card.backText} /></div>
+                <CardMediaList media={media} side="back" hideMeta />
+              </div>
             </div>
           </div>
         </motion.div>
       </motion.div>
-      <p className="gesture-hint">{t.study.hint}</p>
+      {showHint && <p className="gesture-hint">{t.study.hint}</p>}
     </div>
   );
 }
@@ -578,7 +608,7 @@ function WritingMode({ card, media, onRate }: {
   );
 }
 
-function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, order, setOrder, onBack, onStart, onRetryMistakes }: {
+function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, order, setOrder, onBack, onRepeatSame, onStart, onRetryMistakes }: {
   total: number;
   dueCount: number;
   completed: number;
@@ -588,6 +618,7 @@ function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, o
   order: 'default' | 'random';
   setOrder: (order: 'default' | 'random') => void;
   onBack: () => void;
+  onRepeatSame: () => void;
   onStart: (source: StudySessionSource, mode?: StudyMode) => void;
   onRetryMistakes: () => void;
 }) {
@@ -620,11 +651,13 @@ function SessionEmpty({ total, dueCount, completed, mistakes, limit, setLimit, o
       </div>
 
       <div className="session-actions">
-        <button className="primary-button" onClick={() => onStart('all')}>{sourceLabels.all}</button>
+        <button className="primary-button" onClick={onRepeatSame}>Zopakovat stejné kartičky</button>
+        <p className="muted session-action-note">Znovu spustí právě dokončený výběr. Nový průchod níže znovu načte kartičky podle aktuálních voleb.</p>
+        <button className="secondary-button" onClick={() => onStart('all')}>Nový průchod ze všech kartiček</button>
         <button className="secondary-button" onClick={() => onStart('lapsed')}>{sourceLabels.lapsed}</button>
         <button className="secondary-button" onClick={() => onStart('random')}>{sourceLabels.random}</button>
         <button className="secondary-button" onClick={onRetryMistakes} disabled={mistakes === 0}>{sourceLabels.mistakes} ({mistakes})</button>
-        <button className="secondary-button" onClick={() => onStart('due')}>{t.study.reset}</button>
+        <button className="secondary-button" onClick={() => onStart('due')}>Nový dnešní průchod</button>
         <button className="secondary-button" onClick={onBack}>{t.common.back}</button>
       </div>
     </div>

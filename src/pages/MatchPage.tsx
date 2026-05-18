@@ -9,18 +9,25 @@ interface MatchPageProps {
   onBack: () => void;
 }
 
-interface MatchPair {
-  leftId: string;
-  rightId: string;
+interface MatchItem {
+  id: string;
+  cardId: string;
+  content: string;
+  side: 'front' | 'back';
+}
+
+interface MatchAttempt {
+  first: MatchItem;
+  second: MatchItem;
 }
 
 export default function MatchPage({ deckId, onBack }: MatchPageProps) {
   const [deck, setDeck] = useState<Deck>();
   const [cards, setCards] = useState<Card[]>([]);
-  const [selectedLeft, setSelectedLeft] = useState<string>();
-  const [matchedIds, setMatchedIds] = useState<string[]>([]);
-  const [wrongPairs, setWrongPairs] = useState<MatchPair[]>([]);
-  const [wrongFlash, setWrongFlash] = useState<MatchPair>();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
+  const [wrongPairs, setWrongPairs] = useState<MatchAttempt[]>([]);
+  const [wrongFlashIds, setWrongFlashIds] = useState<string[]>([]);
   const [roundKey, setRoundKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -36,10 +43,10 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
       if (!active) return;
       setDeck(nextDeck);
       setCards(shuffle(nextCards.filter((card) => card.frontText.trim() && card.backText.trim())).slice(0, 6));
-      setSelectedLeft(undefined);
-      setMatchedIds([]);
+      setSelectedIds([]);
+      setMatchedCardIds([]);
       setWrongPairs([]);
-      setWrongFlash(undefined);
+      setWrongFlashIds([]);
       setLoading(false);
     }).catch((err) => {
       if (!active) return;
@@ -54,34 +61,47 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
 
   useEffect(() => () => window.clearTimeout(wrongTimer.current), []);
 
-  const rightCards = useMemo(() => shuffle(cards), [cards]);
-  const matchedIdSet = new Set(matchedIds);
-  const activeLeftCards = cards.filter((card) => !matchedIdSet.has(card.id));
-  const activeRightCards = rightCards.filter((card) => !matchedIdSet.has(card.id));
-  const finished = cards.length > 0 && matchedIds.length === cards.length;
-  const correctCount = matchedIds.length;
+  const matchItems = useMemo<MatchItem[]>(() => shuffle(cards.flatMap((card) => [
+    { id: `${card.id}:front`, cardId: card.id, side: 'front' as const, content: card.frontText },
+    { id: `${card.id}:back`, cardId: card.id, side: 'back' as const, content: card.backText }
+  ])), [cards]);
 
-  function chooseLeft(cardId: string) {
-    if (matchedIdSet.has(cardId) || finished) return;
-    setSelectedLeft(cardId);
-  }
+  const matchedCardIdSet = new Set(matchedCardIds);
+  const activeItems = matchItems.filter((item) => !matchedCardIdSet.has(item.cardId));
+  const finished = cards.length > 0 && matchedCardIds.length === cards.length;
+  const correctCount = matchedCardIds.length;
 
-  function chooseRight(cardId: string) {
-    if (!selectedLeft || matchedIdSet.has(cardId) || finished) return;
-    if (selectedLeft === cardId) {
-      setMatchedIds((current) => [...current, cardId]);
-      setSelectedLeft(undefined);
+  function chooseItem(item: MatchItem) {
+    if (matchedCardIdSet.has(item.cardId) || finished || wrongFlashIds.length > 0) return;
+    if (selectedIds.includes(item.id)) {
+      setSelectedIds((current) => current.filter((id) => id !== item.id));
       return;
     }
 
-    const nextWrong = { leftId: selectedLeft, rightId: cardId };
-    setWrongFlash(nextWrong);
-    setWrongPairs((current) => [...current, nextWrong]);
+    if (selectedIds.length === 0) {
+      setSelectedIds([item.id]);
+      return;
+    }
+
+    const first = matchItems.find((candidate) => candidate.id === selectedIds[0]);
+    if (!first) {
+      setSelectedIds([item.id]);
+      return;
+    }
+
+    if (first.cardId === item.cardId && first.side !== item.side) {
+      setMatchedCardIds((current) => [...current, item.cardId]);
+      setSelectedIds([]);
+      return;
+    }
+
+    setWrongFlashIds([first.id, item.id]);
+    setWrongPairs((current) => [...current, { first, second: item }]);
     window.clearTimeout(wrongTimer.current);
     wrongTimer.current = window.setTimeout(() => {
-      setWrongFlash(undefined);
-      setSelectedLeft(undefined);
-    }, 520);
+      setWrongFlashIds([]);
+      setSelectedIds([]);
+    }, 460);
   }
 
   function restart() {
@@ -107,42 +127,21 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
         </div>
       ) : (
         <>
-          <div className="match-board">
-            <section className="match-column">
-              <h2>Pojmy / otázky</h2>
-              {activeLeftCards.map((card) => {
-                const wrong = wrongFlash?.leftId === card.id;
-                return (
-                  <button
-                    className={`match-item ${selectedLeft === card.id ? 'selected' : ''} ${wrong ? 'wrong shake' : ''}`}
-                    type="button"
-                    key={card.id}
-                    disabled={Boolean(wrongFlash)}
-                    onClick={() => chooseLeft(card.id)}
-                  >
-                    <RichTextDisplay content={card.frontText} />
-                  </button>
-                );
-              })}
-            </section>
-
-            <section className="match-column">
-              <h2>Odpovědi</h2>
-              {activeRightCards.map((card) => {
-                const wrong = wrongFlash?.rightId === card.id;
-                return (
-                  <button
-                    className={`match-item ${wrong ? 'wrong shake' : ''}`}
-                    type="button"
-                    key={card.id}
-                    disabled={!selectedLeft || Boolean(wrongFlash)}
-                    onClick={() => chooseRight(card.id)}
-                  >
-                    <RichTextDisplay content={card.backText} />
-                  </button>
-                );
-              })}
-            </section>
+          <div className="match-play-area" aria-label="Zamíchané kartičky pro hledání dvojic">
+            {activeItems.map((item) => {
+              const wrong = wrongFlashIds.includes(item.id);
+              return (
+                <button
+                  className={`match-item ${selectedIds.includes(item.id) ? 'selected' : ''} ${wrong ? 'wrong shake' : ''}`}
+                  type="button"
+                  key={item.id}
+                  disabled={wrongFlashIds.length > 0}
+                  onClick={() => chooseItem(item)}
+                >
+                  <RichTextDisplay content={item.content} />
+                </button>
+              );
+            })}
           </div>
 
           {finished && (
@@ -152,13 +151,12 @@ export default function MatchPage({ deckId, onBack }: MatchPageProps) {
               {wrongPairs.length > 0 ? (
                 <div className="preview-list">
                   {wrongPairs.map((pair) => {
-                    const left = cards.find((card) => card.id === pair.leftId);
-                    const chosen = cards.find((card) => card.id === pair.rightId);
+                    const firstCard = cards.find((card) => card.id === pair.first.cardId);
                     return (
-                      <div className="preview-row invalid" key={`${pair.leftId}-${pair.rightId}`}>
-                        <strong><RichTextDisplay content={left?.frontText ?? ''} /></strong>
-                        <span>Správně: <RichTextDisplay content={left?.backText ?? ''} /></span>
-                        <small>Zvoleno: <RichTextDisplay content={chosen?.backText ?? ''} /></small>
+                      <div className="preview-row invalid" key={`${pair.first.id}-${pair.second.id}`}>
+                        <strong><RichTextDisplay content={pair.first.content} /></strong>
+                        <span>Patří k: <RichTextDisplay content={pair.first.side === 'front' ? firstCard?.backText ?? '' : firstCard?.frontText ?? ''} /></span>
+                        <small>Zvoleno: <RichTextDisplay content={pair.second.content} /></small>
                       </div>
                     );
                   })}

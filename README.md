@@ -6,11 +6,12 @@ Kartičkoid je offline-first PWA aplikace pro tvorbu, správu a procvičování 
 
 - balíčky kartiček s vytvořením, úpravou, duplikací a mazáním
 - kartičky s přední a zadní stranou, tagy, rich-text editorem a médii
-- procvičování swipem: doleva Znovu, doprava Dobré, nahoru Snadné, dolů Těžké
+- procvičování swipem: doleva Znovu, doprava Dobré, nahoru Snadné, dolů Těžké; nápověda se ukazuje jen u první karty v průchodu
 - 3D flip kartičky v režimu procvičování
-- hvězdičky pro důležité kartičky a filtr všechny / označené / neoznačené
+- dlouhé kartičky v procvičování se na mobilu čtou vnitřním scrollováním uvnitř karty
+- hvězdičky pro důležité kartičky a kompaktní ikonový filtr všechny / označené / neoznačené
 - návrat na předchozí kartičku během učení
-- Match mód pro párování pojmů a odpovědí
+- Match mód jako zamíchaná plocha položek pro hledání dvojic bez rozdělení na pojem/odpověď
 - samostatný Test mód s nastavením počtu otázek, směru dotazování, výsledků a hvězdičkových kartiček
 - Study game Rychlá odpověď se skóre a závěrečným vyhodnocením
 - hromadné přidání kartiček v jednom modalu:
@@ -21,7 +22,7 @@ Kartičkoid je offline-first PWA aplikace pro tvorbu, správu a procvičování 
 - JSON export/import jako původní/starší technická varianta
 - CSV a Markdown import
 - Anki ZIP import
-- dark mode s lokálně uloženou preferencí
+- dark mode s lokálně uloženou preferencí a akcenty podle vybrané barvy aplikace
 - experimentální OneDrive zálohování
 - PWA manifest, service worker a offline provoz po prvním načtení
 

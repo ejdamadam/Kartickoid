@@ -268,6 +268,12 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
     ));
   }
 
+  function cycleStarFilter() {
+    setStarFilter((current) => (
+      current === 'all' ? 'starred' : current === 'starred' ? 'unstarred' : 'all'
+    ));
+  }
+
   async function exportCsv() {
     if (!deck) return;
     const blob = new Blob([cardsToCsv(cards)], { type: 'text/csv;charset=utf-8' });
@@ -467,14 +473,18 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
               {t.common.search}
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.deck.searchPlaceholder} />
             </label>
-            <label>
-              Hvězdičky
-              <select value={starFilter} onChange={(event) => setStarFilter(event.target.value as typeof starFilter)}>
-                <option value="all">Všechny kartičky</option>
-                <option value="starred">Pouze s hvězdičkou</option>
-                <option value="unstarred">Bez hvězdičky</option>
-              </select>
-            </label>
+            <div className="star-filter-control">
+              <span className="side-label">Hvězdičky</span>
+              <button
+                className={`star-filter-button star-filter-${starFilter}`}
+                type="button"
+                onClick={cycleStarFilter}
+                aria-label={starFilterAria[starFilter]}
+                title={starFilterAria[starFilter]}
+              >
+                <span aria-hidden="true">{starFilterIcon[starFilter]}</span>
+              </button>
+            </div>
             <div className="tag-filter-panel" aria-label="Filtr tagů">
               {allTags.length === 0 ? (
                 <span className="muted">{t.deck.tagsEmpty}</span>
@@ -638,6 +648,18 @@ const studySourceOptions: Array<{ value: DeckStudySource; label: string }> = [
   { value: 'new', label: 'Nové kartičky' },
   { value: 'due', label: 'K opakování dnes' }
 ];
+
+const starFilterIcon: Record<'all' | 'starred' | 'unstarred', string> = {
+  all: '☆',
+  starred: '★',
+  unstarred: '☆'
+};
+
+const starFilterAria: Record<'all' | 'starred' | 'unstarred', string> = {
+  all: 'Zobrazuji všechny kartičky. Kliknutím zobrazíte pouze kartičky s hvězdičkou.',
+  starred: 'Zobrazuji pouze kartičky s hvězdičkou. Kliknutím zobrazíte kartičky bez hvězdičky.',
+  unstarred: 'Zobrazuji kartičky bez hvězdičky. Kliknutím zobrazíte všechny kartičky.'
+};
 
 function emptyStudyMessage(source: DeckStudySource): string {
   const labels: Record<DeckStudySource, string> = {
