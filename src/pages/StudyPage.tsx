@@ -298,6 +298,10 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
   const [isDismissing, setIsDismissing] = useState(false);
   const frontScrollRef = useRef<HTMLDivElement>(null);
   const backScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollState, setScrollState] = useState({
+    front: { overflow: false, atBottom: true },
+    back: { overflow: false, atBottom: true }
+  });
 
   useEffect(() => {
     setIsDismissing(false);
@@ -311,6 +315,50 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
     const activeScroll = revealed ? backScrollRef.current : frontScrollRef.current;
     activeScroll?.scrollTo({ top: 0, left: 0 });
   }, [revealed]);
+
+  useEffect(() => {
+    const elements = [
+      { side: 'front' as const, element: frontScrollRef.current },
+      { side: 'back' as const, element: backScrollRef.current }
+    ];
+
+    const updateSide = (side: 'front' | 'back', element: HTMLDivElement | null) => {
+      if (!element) return;
+      const overflow = element.scrollHeight > element.clientHeight + 2;
+      const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 3;
+      setScrollState((state) => {
+        const current = state[side];
+        if (current.overflow === overflow && current.atBottom === atBottom) return state;
+        return { ...state, [side]: { overflow, atBottom } };
+      });
+    };
+
+    elements.forEach(({ side, element }) => updateSide(side, element));
+
+    const observers = elements
+      .filter((item): item is { side: 'front' | 'back'; element: HTMLDivElement } => Boolean(item.element))
+      .map(({ side, element }) => {
+        const observer = new ResizeObserver(() => updateSide(side, element));
+        observer.observe(element);
+        const inner = element.firstElementChild;
+        if (inner) observer.observe(inner);
+        return observer;
+      });
+
+    return () => observers.forEach((observer) => observer.disconnect());
+  }, [card.id, media, revealed]);
+
+  function handleReviewScroll(side: 'front' | 'back') {
+    const element = side === 'front' ? frontScrollRef.current : backScrollRef.current;
+    if (!element) return;
+    const overflow = element.scrollHeight > element.clientHeight + 2;
+    const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 3;
+    setScrollState((state) => {
+      const current = state[side];
+      if (current.overflow === overflow && current.atBottom === atBottom) return state;
+      return { ...state, [side]: { overflow, atBottom } };
+    });
+  }
 
   async function dismissCard(rating: Rating, target: { x: number; y: number }) {
     if (isDismissing) return;
@@ -384,12 +432,20 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
               />
               <div className="review-side centered">
                 <p className="side-label">{t.deck.frontSide}</p>
-                <div className="review-scroll" ref={frontScrollRef}>
+                <div
+                  className={`review-scroll ${scrollState.front.overflow ? 'has-overflow' : ''}`}
+                  ref={frontScrollRef}
+                  onScroll={() => handleReviewScroll('front')}
+                >
                   <div className="review-scroll-inner">
                     <div className="review-text"><RichTextDisplay content={card.frontText} /></div>
                     <CardMediaList media={media} side="front" hideMeta />
                   </div>
                 </div>
+                <span
+                  className={`review-scroll-cue ${scrollState.front.overflow && !scrollState.front.atBottom ? 'is-visible' : ''}`}
+                  aria-hidden="true"
+                />
               </div>
             </div>
             <div className="flip-card-face flip-card-back">
@@ -401,12 +457,20 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
               />
               <div className="review-side centered">
                 <p className="side-label">{t.deck.backSide}</p>
-                <div className="review-scroll" ref={backScrollRef}>
+                <div
+                  className={`review-scroll ${scrollState.back.overflow ? 'has-overflow' : ''}`}
+                  ref={backScrollRef}
+                  onScroll={() => handleReviewScroll('back')}
+                >
                   <div className="review-scroll-inner">
                     <div className="review-text"><RichTextDisplay content={card.backText} /></div>
                     <CardMediaList media={media} side="back" hideMeta />
                   </div>
                 </div>
+                <span
+                  className={`review-scroll-cue ${scrollState.back.overflow && !scrollState.back.atBottom ? 'is-visible' : ''}`}
+                  aria-hidden="true"
+                />
               </div>
             </div>
           </motion.div>

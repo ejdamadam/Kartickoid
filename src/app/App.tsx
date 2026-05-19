@@ -114,10 +114,11 @@ export default function App() {
   }, []);
   const canGoBack = routeStack.length > 1;
   const showBackButton = route.name !== 'home' && canGoBack;
+  const canSwipeBack = canGoBack && route.name !== 'study';
 
   const gestureHandlers = useSwipeNavigation({
     drawerOpen,
-    canGoBack,
+    canGoBack: canSwipeBack,
     onOpenDrawer: () => setDrawerOpen(true),
     onCloseDrawer: () => setDrawerOpen(false),
     onBack: goBack
