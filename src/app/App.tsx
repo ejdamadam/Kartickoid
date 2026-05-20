@@ -116,7 +116,7 @@ export default function App() {
   const showBackButton = route.name !== 'home' && canGoBack;
   const canSwipeBack = canGoBack && route.name !== 'study';
 
-  const gestureHandlers = useSwipeNavigation({
+  const { gestureHandlers, swipeProgress, isSwiping } = useSwipeNavigation({
     drawerOpen,
     canGoBack: canSwipeBack,
     onOpenDrawer: () => setDrawerOpen(true),
@@ -125,7 +125,7 @@ export default function App() {
   });
 
   return (
-    <div className={`app-shell ${route.name === 'study' ? 'study-mode' : ''}`} {...gestureHandlers}>
+    <div className={`app-shell ${route.name === 'study' ? 'study-mode' : ''} ${isSwiping ? 'is-swiping' : ''}`} {...gestureHandlers}>
       <AppDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -141,6 +141,18 @@ export default function App() {
           <Modal title={modal === 'settings' ? 'Nastavení' : 'O aplikaci'} onClose={() => setModal(undefined)}>
               {modal === 'settings' ? <SettingsModal onClose={() => setModal(undefined)} /> : <p>Kartičkoid v{APP_VERSION}  ukuchtil Hůlka 2026 s Koudexem a Džeminou ;-P.</p>}
           </Modal>
+      )}
+
+      {isSwiping && (
+        <div 
+          className="swipe-back-indicator" 
+          style={{ 
+            opacity: Math.min(swipeProgress * 1.5, 1),
+            transform: `translateX(${Math.min(swipeProgress * 20, 10)}px)`
+          }}
+        >
+          ←
+        </div>
       )}
       
       <main className="main-content">
@@ -172,6 +184,14 @@ export default function App() {
             animate="center"
             exit="exit"
             transition={{ duration: 0.18, ease: 'easeOut' }}
+            style={isSwiping ? {
+              x: swipeProgress * 120,
+              scale: 1 - (swipeProgress * 0.04),
+              opacity: 1 - (swipeProgress * 0.3),
+              borderRadius: swipeProgress * 24,
+              overflow: 'hidden',
+              boxShadow: `0 10px 40px rgba(0,0,0,${swipeProgress * 0.15})`
+            } : undefined}
             className="route-container"
           >
             {route.name === 'home' && (
@@ -252,36 +272,76 @@ function useSwipeNavigation({ drawerOpen, canGoBack, onOpenDrawer, onCloseDrawer
   onCloseDrawer: () => void;
   onBack: () => void;
 }) {
-  const touchStart = useRef<{ x: number; y: number; drawerOpen: boolean } | undefined>(undefined);
+  const [swipeProgress, setSwipeProgress] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const touchStart = useRef<{ x: number; y: number; type: 'back' | 'drawer' | 'none' } | undefined>(undefined);
 
   return {
-    onTouchStart: (event: TouchEvent<HTMLDivElement>) => {
-      const touch = event.touches[0];
-      touchStart.current = { x: touch.clientX, y: touch.clientY, drawerOpen };
-    },
-    onTouchEnd: (event: TouchEvent<HTMLDivElement>) => {
-      const start = touchStart.current;
-      touchStart.current = undefined;
-      if (!start) return;
+    swipeProgress,
+    isSwiping,
+    gestureHandlers: {
+      onTouchStart: (event: TouchEvent<HTMLDivElement>) => {
+        const touch = event.touches[0];
+        let type: 'back' | 'drawer' | 'none' = 'none';
+        
+        if (drawerOpen) {
+          type = 'drawer';
+        } else if (touch.clientX <= 32) {
+          type = 'drawer';
+        } else if (canGoBack && touch.clientX > 32 && touch.clientX <= 80) {
+          type = 'back';
+        }
+        
+        touchStart.current = { x: touch.clientX, y: touch.clientY, type };
+      },
+      onTouchMove: (event: TouchEvent<HTMLDivElement>) => {
+        const start = touchStart.current;
+        if (!start || start.type === 'none') return;
 
-      const touch = event.changedTouches[0];
-      const dx = touch.clientX - start.x;
-      const dy = touch.clientY - start.y;
-      const horizontal = Math.abs(dx) > 72 && Math.abs(dx) > Math.abs(dy) * 1.8;
-      if (!horizontal) return;
+        const touch = event.touches[0];
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
 
-      if (start.drawerOpen && dx < -72) {
-        onCloseDrawer();
-        return;
-      }
+        // If vertical movement is too high, cancel the swipe to allow scrolling
+        if (Math.abs(dy) > Math.abs(dx) * 0.6 && !isSwiping) {
+          touchStart.current = undefined;
+          return;
+        }
 
-      if (!start.drawerOpen && start.x <= 28 && dx > 72) {
-        onOpenDrawer();
-        return;
-      }
+        if (start.type === 'back' && dx > 0) {
+          setIsSwiping(true);
+          const progress = Math.min(dx / 160, 1);
+          setSwipeProgress(progress);
+        }
+      },
+      onTouchEnd: (event: TouchEvent<HTMLDivElement>) => {
+        const start = touchStart.current;
+        touchStart.current = undefined;
+        if (!start || start.type === 'none') {
+          setIsSwiping(false);
+          setSwipeProgress(0);
+          return;
+        }
 
-      if (!start.drawerOpen && canGoBack && start.x > 28 && start.x <= 96 && dx > 84) {
-        onBack();
+        const touch = event.changedTouches[0];
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
+        const horizontal = Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5;
+
+        if (start.type === 'drawer') {
+          if (drawerOpen && dx < -60) onCloseDrawer();
+          else if (!drawerOpen && dx > 60) onOpenDrawer();
+        } else if (start.type === 'back') {
+          if (horizontal && dx > 70) onBack();
+        }
+
+        setIsSwiping(false);
+        setSwipeProgress(0);
+      },
+      onTouchCancel: () => {
+        touchStart.current = undefined;
+        setIsSwiping(false);
+        setSwipeProgress(0);
       }
     }
   };

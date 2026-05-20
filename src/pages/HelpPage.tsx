@@ -23,6 +23,19 @@ export default function HelpPage() {
         </section>
 
         <section className="panel">
+          <h2>Technologie PWA a její limity</h2>
+          <p>Kartičkoid využívá technologii <strong>PWA (Progressive Web App)</strong>. To znamená, že se v telefonu chová téměř jako běžná aplikace, ale běží v jádru prohlížeče (Chrome/Safari).</p>
+          <ul>
+            <li><strong>Funguje offline:</strong> Jakmile aplikaci jednou načtete, Service Worker uloží její soubory. I když zdrojový server vypadne, Kartičkoid se vám z plochy nebo záložky normálně spustí.</li>
+            <li><strong>Soukromí:</strong> Vaše data (kartičky, obrázky) nikdy neopouštějí zařízení, pokud nepoužijete OneDrive synchronizaci. Vše je uloženo v lokální databázi prohlížeče (IndexedDB).</li>
+          </ul>
+          <div className="callout caution">
+            <p><strong>⚠️ Pozor na automatické mazání dat:</strong> Operační systémy Android a iOS mohou při nedostatku místa na disku nebo dlouhé neaktivitě (typicky 30+ dní) automaticky "vyčistit" data prohlížečů, včetně vaší databáze kartiček.</p>
+            <p><strong>Pravidelně používejte ZIP export</strong> pro trvalou zálohu svých dat mimo prohlížeč. Nativní aplikace (APK) tímto rizikem netrpí, ale PWA je na správu paměti systémem náchylná.</p>
+          </div>
+        </section>
+
+        <section className="panel">
           <h2>Základní workflow</h2>
           <p>Kartičkoid je lokální aplikace v prohlížeči. Data se ukládají do zařízení, takže nepotřebujete účet ani server. Typický postup je: vytvořit balíček, přidat kartičky, učit se swipem, průběžně upravovat špatně formulované karty a pravidelně exportovat ZIP zálohu.</p>
           <ul>
