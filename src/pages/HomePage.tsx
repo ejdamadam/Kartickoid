@@ -239,7 +239,6 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
         </div>
         <div className="toolbar">
           <button className="secondary-button" onClick={() => setCustomStudyOpen(true)}>Procvičit více sad</button>
-          <button className="primary-button" onClick={() => setEditingDeck('new')}>{t.home.newDeck}</button>
         </div>
       </div>
 
@@ -290,7 +289,10 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
 
       <div className="home-search">
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.home.searchPlaceholder} />
-        <button className="folder-create-button" onClick={() => setEditingGroup('new')} aria-label="Nová složka" title="Nová složka">
+        <button className="home-create-button package-create-button" onClick={() => setEditingDeck('new')} aria-label={t.home.newDeck} title={t.home.newDeck}>
+          <span className="plus-icon" aria-hidden="true" />
+        </button>
+        <button className="home-create-button folder-create-button" onClick={() => setEditingGroup('new')} aria-label="Nová složka" title="Nová složka">
           <span className="folder-icon" aria-hidden="true" />
         </button>
       </div>

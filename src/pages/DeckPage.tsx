@@ -654,7 +654,9 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
               aria-label="Přidat více kartiček"
               title="Přidat více kartiček"
             >
-              <span className="stack-plus-icon" aria-hidden="true" />
+              <span className="stack-plus-icon" aria-hidden="true">
+                <span className="stack-plus-mark" aria-hidden="true" />
+              </span>
             </button>
           </div>
 
