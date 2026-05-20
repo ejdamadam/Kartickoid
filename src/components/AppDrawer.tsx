@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { t } from '../i18n';
 import { APP_VERSION } from '../app/version';
 
-const appLogoUrl = `${import.meta.env.BASE_URL}icons/kartickoid_logo.png`;
+const appLogoUrl = `${import.meta.env.BASE_URL}icons/pan_kartickoid.png`;
 
 interface AppDrawerProps {
   open: boolean;

@@ -209,70 +209,74 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
 
       {error && <p className="error-box">{error}</p>}
 
-      <AnimatePresence mode="wait">
-        {!currentCard ? (
-          <motion.div
-            key="empty"
-            initial={{ opacity: 0, scale: 0.94 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.94 }}
-          >
-            <SessionEmpty
-              total={allCards.length}
-              dueCount={dueCount}
-              completed={completed}
-              mistakes={mistakeIds.length}
-              limit={limit}
-              setLimit={setLimit}
-              order={order}
-              setOrder={setOrder}
-              onBack={onBack}
-              onRepeatSame={repeatSameCards}
-              onStart={startSession}
-              onRetryMistakes={retryMistakes}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            key={currentCard.id}
-            initial={{ opacity: 0, scale: 0.88, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 1.05, y: -20 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30, opacity: { duration: 0.2 } }}
-          >
-            {mode === 'learning' && (
-              <LearningCard
-                card={currentCard}
-                media={currentMedia}
-                revealed={revealed}
-                showHint={index === 0 && completed === 0}
-                onFlip={() => setRevealed((value) => !value)}
-                onRate={rate}
-                onPrevious={goPreviousCard}
-                canGoPrevious={previousCards.length > 0 && index > 0}
-                onToggleStarred={() => void toggleCurrentStarred(currentCard)}
+      <div className={`study-mode-stage ${mode === 'learning' ? 'is-learning' : 'is-scrollable'}`}>
+        <AnimatePresence mode="wait">
+          {!currentCard ? (
+            <motion.div
+              className="study-mode-page"
+              key="empty"
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+            >
+              <SessionEmpty
+                total={allCards.length}
+                dueCount={dueCount}
+                completed={completed}
+                mistakes={mistakeIds.length}
+                limit={limit}
+                setLimit={setLimit}
+                order={order}
+                setOrder={setOrder}
+                onBack={onBack}
+                onRepeatSame={repeatSameCards}
+                onStart={startSession}
+                onRetryMistakes={retryMistakes}
               />
-            )}
-            {mode === 'test' && (
-              <TestMode
-                card={currentCard}
-                media={media}
-                allCards={allCards}
-                onRate={rate}
-                onShowDetail={() => setRevealed(true)}
-                revealed={revealed}
-              />
-            )}
-            {mode === 'writing' && (
-              <WritingMode
-                card={currentCard}
-                media={currentMedia}
-                onRate={rate}
-              />
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          ) : (
+            <motion.div
+              className="study-mode-page"
+              key={`${mode}-${currentCard.id}`}
+              initial={{ opacity: 0, scale: 0.88, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 1.05, y: -20 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30, opacity: { duration: 0.2 } }}
+            >
+              {mode === 'learning' && (
+                <LearningCard
+                  card={currentCard}
+                  media={currentMedia}
+                  revealed={revealed}
+                  showHint={index === 0 && completed === 0}
+                  onFlip={() => setRevealed((value) => !value)}
+                  onRate={rate}
+                  onPrevious={goPreviousCard}
+                  canGoPrevious={previousCards.length > 0 && index > 0}
+                  onToggleStarred={() => void toggleCurrentStarred(currentCard)}
+                />
+              )}
+              {mode === 'test' && (
+                <TestMode
+                  card={currentCard}
+                  media={media}
+                  allCards={allCards}
+                  onRate={rate}
+                  onShowDetail={() => setRevealed(true)}
+                  revealed={revealed}
+                />
+              )}
+              {mode === 'writing' && (
+                <WritingMode
+                  card={currentCard}
+                  media={currentMedia}
+                  onRate={rate}
+                />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </section>
   );
 }

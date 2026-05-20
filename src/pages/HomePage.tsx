@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import Modal from '../components/Modal';
 import DeckForm from '../components/DeckForm';
 import { createDeckGroupInput, createDeckInput, db, deleteDeckCascade } from '../db/database';
@@ -27,6 +28,8 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
   const [allCards, setAllCards] = useState<Card[]>(() => cachedHomeState.allCards);
   const [editingDeck, setEditingDeck] = useState<Deck | 'new'>();
   const [editingGroup, setEditingGroup] = useState<DeckGroup | 'new'>();
+  const [assigningGroup, setAssigningGroup] = useState<DeckGroup>();
+  const [selectedAssignDecks, setSelectedAssignDecks] = useState<string[]>([]);
   const [customStudyOpen, setCustomStudyOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [selectedDecks, setSelectedDecks] = useState<string[]>([]);
@@ -101,6 +104,12 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
     };
   }, [groups, summaries, query]);
 
+  const assignableDecks = useMemo(() => (
+    assigningGroup
+      ? summaries.filter((summary) => summary.deck.groupId !== assigningGroup.id)
+      : []
+  ), [assigningGroup, summaries]);
+
   async function saveDeck(values: { name: string; description: string; groupId?: string }) {
     try {
       if (editingDeck === 'new') {
@@ -164,6 +173,33 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
     pendingScrollY.current = window.scrollY;
     try {
       await deleteDeckCascade(deck.id);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  function openAssignDecks(group: DeckGroup) {
+    setAssigningGroup(group);
+    setSelectedAssignDecks([]);
+  }
+
+  function toggleAssignDeck(deckId: string) {
+    setSelectedAssignDecks((ids) => ids.includes(deckId) ? ids.filter((id) => id !== deckId) : [...ids, deckId]);
+  }
+
+  async function assignDecksToGroup() {
+    if (!assigningGroup || selectedAssignDecks.length === 0) return;
+    pendingScrollY.current = window.scrollY;
+    try {
+      const timestamp = nowIso();
+      await db.transaction('rw', db.decks, async () => {
+        await Promise.all(selectedAssignDecks.map((deckId) => (
+          db.decks.update(deckId, { groupId: assigningGroup.id, updatedAt: timestamp })
+        )));
+      });
+      setAssigningGroup(undefined);
+      setSelectedAssignDecks([]);
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
@@ -291,23 +327,40 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
                   <small>{groupSummaries.length} balíčků</small>
                 </button>
                 <div className="deck-group-actions">
-                  <button className="tiny-button" onClick={() => setEditingGroup(group)}>{t.common.edit}</button>
-                  <button className="tiny-button danger" onClick={() => void deleteGroup(group)}>{t.common.delete}</button>
+                  <button className="round-icon-button" type="button" onClick={() => openAssignDecks(group)} aria-label={`Přidat balíčky do složky ${group.name}`} title="Přidat balíčky do složky">
+                    <span className="plus-icon" aria-hidden="true" />
+                  </button>
+                  <button className="round-icon-button" type="button" onClick={() => setEditingGroup(group)} aria-label={`Upravit složku ${group.name}`} title={t.common.edit}>
+                    <span className="pencil-icon" aria-hidden="true" />
+                  </button>
+                  <button className="round-icon-button danger" type="button" onClick={() => void deleteGroup(group)} aria-label={`Smazat složku ${group.name}`} title={t.common.delete}>
+                    <span className="close-icon" aria-hidden="true" />
+                  </button>
                 </div>
               </header>
-              {expanded && (
-                <div className="deck-grid">
-                  {groupSummaries.map((summary) => (
-                    <DeckCard
-                      key={summary.deck.id}
-                      summary={summary}
-                      onOpen={() => onOpenDeck(summary.deck.id)}
-                      onEdit={() => setEditingDeck(summary.deck)}
-                      onDelete={() => deleteDeck(summary.deck)}
-                    />
-                  ))}
-                </div>
-              )}
+              <AnimatePresence initial={false}>
+                {expanded && (
+                  <motion.div
+                    className="deck-group-content"
+                    initial={{ height: 0, opacity: 0, y: -6 }}
+                    animate={{ height: 'auto', opacity: 1, y: 0 }}
+                    exit={{ height: 0, opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <div className="deck-grid">
+                      {groupSummaries.map((summary) => (
+                        <DeckCard
+                          key={summary.deck.id}
+                          summary={summary}
+                          onOpen={() => onOpenDeck(summary.deck.id)}
+                          onEdit={() => setEditingDeck(summary.deck)}
+                          onDelete={() => deleteDeck(summary.deck)}
+                        />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </section>
           );
         })}
@@ -380,6 +433,35 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
           />
         </Modal>
       )}
+
+      {assigningGroup && (
+        <Modal title={`Přidat balíčky do složky ${assigningGroup.name}`} onClose={() => setAssigningGroup(undefined)}>
+          <div className="stack">
+            {assignableDecks.length === 0 ? (
+              <p className="muted">Všechny existující balíčky už jsou v této složce.</p>
+            ) : (
+              <div className="deck-selector-list">
+                {assignableDecks.map((summary) => (
+                  <label key={summary.deck.id} className={`chip deck-select-chip ${selectedAssignDecks.includes(summary.deck.id) ? 'selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={selectedAssignDecks.includes(summary.deck.id)}
+                      onChange={() => toggleAssignDeck(summary.deck.id)}
+                    />
+                    {summary.deck.name}
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="button-row">
+              <button className="primary-button" type="button" disabled={selectedAssignDecks.length === 0} onClick={() => void assignDecksToGroup()}>
+                Přidat vybrané balíčky
+              </button>
+              <button className="secondary-button" type="button" onClick={() => setAssigningGroup(undefined)}>{t.common.cancel}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }
@@ -397,7 +479,7 @@ function DeckCard({ summary, onOpen, onEdit, onDelete }: {
           <span className="pencil-icon" aria-hidden="true" />
         </button>
         <button className="round-icon-button danger" type="button" onClick={onDelete} aria-label={`Smazat balíček ${summary.deck.name}`} title={t.common.delete}>
-          <span className="trash-icon" aria-hidden="true" />
+          <span className="close-icon" aria-hidden="true" />
         </button>
       </div>
       <button className="deck-open" onClick={onOpen}>
