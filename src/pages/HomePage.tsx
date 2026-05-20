@@ -476,18 +476,42 @@ function DeckCard({ summary, onOpen, onEdit, onDelete }: {
 }) {
   return (
     <article className="deck-card">
+      <button
+        className="deck-card-hit-area"
+        type="button"
+        onClick={onOpen}
+        aria-label={`Otevřít balíček ${summary.deck.name}`}
+      />
       <div className="deck-card-actions" aria-label="Akce balíčku">
-        <button className="round-icon-button" type="button" onClick={onEdit} aria-label={`Upravit balíček ${summary.deck.name}`} title={t.common.edit}>
+        <button
+          className="round-icon-button"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onEdit();
+          }}
+          aria-label={`Upravit balíček ${summary.deck.name}`}
+          title={t.common.edit}
+        >
           <span className="pencil-icon" aria-hidden="true" />
         </button>
-        <button className="round-icon-button danger" type="button" onClick={onDelete} aria-label={`Smazat balíček ${summary.deck.name}`} title={t.common.delete}>
+        <button
+          className="round-icon-button danger"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+          aria-label={`Smazat balíček ${summary.deck.name}`}
+          title={t.common.delete}
+        >
           <span className="close-icon" aria-hidden="true" />
         </button>
       </div>
-      <button className="deck-open" onClick={onOpen}>
+      <div className="deck-open">
         <span className="deck-title">{summary.deck.name}</span>
         {summary.deck.description && <span className="deck-description">{summary.deck.description}</span>}
-      </button>
+      </div>
       <div className="metric-grid">
         <span><strong>{summary.cardCount}</strong> {t.home.cards}</span>
         <span><strong>{summary.dueCount}</strong> {t.common.today}</span>

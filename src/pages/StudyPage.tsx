@@ -307,6 +307,9 @@ function sideLabel(side: CardSide) {
   return side === 'front' ? t.deck.frontSide : t.deck.backSide;
 }
 
+const TAP_CANCEL_DISTANCE = 8;
+const TAP_SUPPRESS_MS = 220;
+
 function LearningCard({ card, media, initialSide, revealed, showHint, onFlip, onRate, onPrevious, canGoPrevious, onToggleStarred }: {
   card: Card;
   media: Media[];
@@ -339,11 +342,15 @@ function LearningCard({ card, media, initialSide, revealed, showHint, onFlip, on
   });
   const shellRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number; locked: boolean; scrollEl?: HTMLDivElement } | undefined>(undefined);
+  const dragExceededRef = useRef(false);
+  const suppressTapUntilRef = useRef(0);
   const frontFaceSide = initialSide;
   const backFaceSide = oppositeSide(initialSide);
 
   useEffect(() => {
     setIsDismissing(false);
+    dragExceededRef.current = false;
+    suppressTapUntilRef.current = 0;
     x.set(0);
     y.set(0);
     frontScrollRef.current?.scrollTo({ top: 0, left: 0 });
@@ -409,8 +416,26 @@ function LearningCard({ card, media, initialSide, revealed, showHint, onFlip, on
     onRate(rating);
   }
 
+  function suppressNextTap() {
+    dragExceededRef.current = true;
+    suppressTapUntilRef.current = Date.now() + TAP_SUPPRESS_MS;
+  }
+
+  function onDragStart() {
+    dragExceededRef.current = false;
+  }
+
+  function onDrag(_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
+    if (Math.hypot(info.offset.x, info.offset.y) > TAP_CANCEL_DISTANCE) {
+      suppressNextTap();
+    }
+  }
+
   function onDragEnd(_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     const { offset, velocity } = info;
+    if (Math.hypot(offset.x, offset.y) > TAP_CANCEL_DISTANCE || dragExceededRef.current) {
+      suppressNextTap();
+    }
     const horizontal = Math.abs(offset.x) > Math.abs(offset.y);
     const forceX = Math.abs(offset.x) + Math.abs(velocity.x) * 0.18;
     const forceY = Math.abs(offset.y) + Math.abs(velocity.y) * 0.18;
@@ -474,6 +499,7 @@ function LearningCard({ card, media, initialSide, revealed, showHint, onFlip, on
       }
 
       if (movedEnough) {
+        suppressNextTap();
         start.locked = true;
         document.body.classList.add('card-swipe-active');
       }
@@ -498,11 +524,16 @@ function LearningCard({ card, media, initialSide, revealed, showHint, onFlip, on
     };
   }, [isDismissing]);
 
-  function handleTap(event: any, info: any) {
+  function handleTap(event: any) {
     const interactiveTarget = event.target.closest('audio, button, .audio-shell');
     if (interactiveTarget) {
       return;
     }
+    if (Date.now() < suppressTapUntilRef.current) {
+      dragExceededRef.current = false;
+      return;
+    }
+    dragExceededRef.current = false;
     onFlip();
   }
 
@@ -518,6 +549,8 @@ function LearningCard({ card, media, initialSide, revealed, showHint, onFlip, on
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         whileTap={{ scale: 0.985 }}
         onTap={handleTap}
+        onDragStart={onDragStart}
+        onDrag={onDrag}
         onDragEnd={onDragEnd}
       >
         {/*

@@ -683,6 +683,7 @@ body.card-swipe-active {
   position: relative;
   contain-intrinsic-size: 220px;
   padding-top: 1.35rem;
+  cursor: pointer;
 }
 
 .study-card-preview {
@@ -690,6 +691,8 @@ body.card-swipe-active {
 }
 
 .deck-open {
+  position: relative;
+  z-index: 1;
   display: grid;
   width: 100%;
   gap: 0.4rem;
@@ -698,13 +701,40 @@ body.card-swipe-active {
   padding: 0;
   text-align: left;
   padding-right: 4.6rem;
+  pointer-events: none;
+}
+
+.deck-card-hit-area {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  border-radius: inherit;
+  background: transparent;
+  color: transparent;
+  padding: 0;
+}
+
+.deck-card-hit-area:focus-visible {
+  outline: 3px solid rgba(var(--primary-rgb), 0.32);
+  outline-offset: 3px;
+}
+
+.deck-card-hit-area:active ~ .deck-open .deck-title {
+  color: var(--primary-color);
+}
+
+.deck-card > .metric-grid {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .deck-card-actions {
   position: absolute;
   top: 0.7rem;
   right: 0.7rem;
-  z-index: 2;
+  z-index: 3;
   display: inline-flex;
   gap: 0.32rem;
 }
