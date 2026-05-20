@@ -128,9 +128,18 @@ Každá dvojice patří na samostatný řádek.
 
 ## Soukromí a lokální data
 
-Aplikace nepoužívá vlastní vzdálené API. Kartičky, obrázky, zvuky, nastavení i historie procvičování zůstávají lokálně v prohlížeči. Pro důležitá data používejte ZIP export, protože prohlížeče mohou lokální úložiště při nedostatku místa nebo dlouhé neaktivitě vyčistit.
+Aplikace nepoužívá vlastní vzdálené API. Kartičky, obrázky, zvuky, nastavení i historie procvičování zůstávají lokálně v prohlížeči. 
 
-## iOS PWA poznámky
+> [!CAUTION]
+> **DŮLEŽITÉ UPOZORNĚNÍ:** Prohlížeče (Android i iOS) mohou lokální úložiště při nedostatku místa na disku nebo dlouhé neaktivitě (typicky po 30 dnech nepoužívání) automaticky vyčistit. **Pro ochranu svých dat proto pravidelně používejte ZIP export.**
+
+### Co se stane, když vypadne server?
+Díky technologii PWA aplikace po prvním načtení funguje zcela offline. Pokud by zdrojový server (GitHub Pages) přestal fungovat:
+- Aplikace se vám v telefonu/prohlížeči i nadále spustí ze zálohy (Service Worker).
+- Vaše uložená data zůstanou v bezpečí v paměti telefonu.
+- Jediné omezení je, že nedostanete nové aktualizace aplikace, dokud se server neobnoví.
+
+## iOS a Android PWA poznámky
 
 - Instalace na plochu funguje přes Safari a sdílecí volbu Přidat na plochu.
 - PWA a service worker vyžadují HTTPS na produkční doméně.
