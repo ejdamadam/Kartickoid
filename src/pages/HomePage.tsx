@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Modal from '../components/Modal';
 import DeckForm from '../components/DeckForm';
-import { createDeckInput, db, deleteDeckCascade } from '../db/database';
-import type { Card, Deck, DeckSummary, ReviewLog } from '../types';
+import { createDeckGroupInput, createDeckInput, db, deleteDeckCascade } from '../db/database';
+import type { Card, Deck, DeckGroup, DeckSummary, ReviewLog } from '../types';
 import { formatDateTime, nowIso, startOfTodayIso } from '../utils/date';
 import { createBackupZipFile } from '../services/exportImport';
 import { getOneDriveSettings, uploadOneDriveBackup, type OneDriveSettings } from '../services/oneDriveSync';
@@ -15,16 +15,20 @@ interface HomePageProps {
   onCustomStudy: (deckIds: string[], tags: string[]) => void;
 }
 
-let cachedHomeState: { summaries: DeckSummary[]; allCards: Card[] } = {
+let cachedHomeState: { summaries: DeckSummary[]; groups: DeckGroup[]; allCards: Card[] } = {
   summaries: [],
+  groups: [],
   allCards: []
 };
 
 export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomStudy }: HomePageProps) {
   const [summaries, setSummaries] = useState<DeckSummary[]>(() => cachedHomeState.summaries);
+  const [groups, setGroups] = useState<DeckGroup[]>(() => cachedHomeState.groups);
   const [allCards, setAllCards] = useState<Card[]>(() => cachedHomeState.allCards);
   const [editingDeck, setEditingDeck] = useState<Deck | 'new'>();
+  const [editingGroup, setEditingGroup] = useState<DeckGroup | 'new'>();
   const [customStudyOpen, setCustomStudyOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [selectedDecks, setSelectedDecks] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [query, setQuery] = useState('');
@@ -36,15 +40,18 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
   useEffect(() => {
     let active = true;
     Promise.all([
+      db.deckGroups.toArray(),
       db.decks.toArray(),
       db.cards.toArray(),
       db.reviewLogs.toArray()
-    ]).then(([decks, cards, logs]) => {
+    ]).then(([deckGroups, decks, cards, logs]) => {
       if (!active) return;
       const nextSummaries = buildDeckSummaries(decks, cards, logs);
-      cachedHomeState = { summaries: nextSummaries, allCards: cards };
+      const nextGroups = deckGroups.sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+      cachedHomeState = { summaries: nextSummaries, groups: nextGroups, allCards: cards };
       setAllCards(cards);
       setSummaries(nextSummaries);
+      setGroups(nextGroups);
       if (pendingScrollY.current !== undefined) {
         const scrollY = pendingScrollY.current;
         pendingScrollY.current = undefined;
@@ -75,15 +82,33 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
     return Array.from(tags).sort((a, b) => a.localeCompare(b, 'cs'));
   }, [selectedDecks, allCards]);
 
-  const filteredSummaries = useMemo(() => {
+  const groupedSummaries = useMemo(() => {
     const q = query.toLowerCase().trim();
-    return summaries.filter(s => s.deck.name.toLowerCase().includes(q) || s.deck.description?.toLowerCase().includes(q));
-  }, [summaries, query]);
+    const groupNameById = new Map(groups.map((group) => [group.id, group.name.toLowerCase()]));
+    const matches = summaries.filter((summary) => {
+      if (!q) return true;
+      return summary.deck.name.toLowerCase().includes(q)
+        || summary.deck.description?.toLowerCase().includes(q)
+        || groupNameById.get(summary.deck.groupId ?? '')?.includes(q);
+    });
 
-  async function saveDeck(values: { name: string; description: string }) {
+    return [
+      ...groups.map((group) => ({
+        group,
+        summaries: matches.filter((summary) => summary.deck.groupId === group.id)
+      })).filter((item) => item.summaries.length > 0 || !q),
+      {
+        group: undefined,
+        summaries: matches.filter((summary) => !summary.deck.groupId || !groupNameById.has(summary.deck.groupId))
+      }
+    ].filter((item) => item.group || item.summaries.length > 0);
+  }, [groups, summaries, query]);
+
+  async function saveDeck(values: { name: string; description: string; groupId?: string }) {
     try {
       if (editingDeck === 'new') {
         const deck = createDeckInput(values.name, values.description);
+        deck.groupId = values.groupId;
         const deckId = await db.decks.add(deck);
         setEditingDeck(undefined);
         onChanged();
@@ -92,11 +117,45 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
         await db.decks.update(editingDeck.id, {
           name: values.name.trim(),
           description: values.description.trim(),
+          groupId: values.groupId,
           updatedAt: nowIso()
         });
         setEditingDeck(undefined);
         onChanged();
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  async function saveGroup(values: { name: string }) {
+    try {
+      if (editingGroup === 'new') {
+        await db.deckGroups.add(createDeckGroupInput(values.name));
+      } else if (editingGroup) {
+        await db.deckGroups.update(editingGroup.id, {
+          name: values.name.trim(),
+          updatedAt: nowIso()
+        });
+      }
+      setEditingGroup(undefined);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    }
+  }
+
+  async function deleteGroup(group: DeckGroup) {
+    const ok = window.confirm(`Smazat skupinu "${group.name}"? Balíčky zůstanou zachované a přesunou se do sekce Bez skupiny.`);
+    if (!ok) return;
+    pendingScrollY.current = window.scrollY;
+    try {
+      await db.transaction('rw', db.deckGroups, db.decks, async () => {
+        const decksInGroup = await db.decks.where('groupId').equals(group.id).toArray();
+        await Promise.all(decksInGroup.map((deck) => db.decks.update(deck.id, { groupId: undefined, updatedAt: nowIso() })));
+        await db.deckGroups.delete(group.id);
+      });
+      onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     }
@@ -146,6 +205,7 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
           <h1>{t.home.title}</h1>
         </div>
         <div className="toolbar">
+          <button className="secondary-button" onClick={() => setEditingGroup('new')}>Nová skupina</button>
           <button className="secondary-button" onClick={() => setCustomStudyOpen(true)}>Procvičit více sad</button>
           <button className="primary-button" onClick={() => setEditingDeck('new')}>{t.home.newDeck}</button>
         </div>
@@ -200,24 +260,53 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.home.searchPlaceholder} />
       </div>
 
-      <div className="deck-grid">
-        {filteredSummaries.map((summary) => (
-          <article className="deck-card" key={summary.deck.id}>
-            <button className="deck-open" onClick={() => onOpenDeck(summary.deck.id)}>
-              <span className="deck-title">{summary.deck.name}</span>
-              {summary.deck.description && <span className="deck-description">{summary.deck.description}</span>}
-            </button>
-            <div className="metric-grid">
-              <span><strong>{summary.cardCount}</strong> {t.home.cards}</span>
-              <span><strong>{summary.dueCount}</strong> {t.common.today}</span>
-              <span><strong>{summary.reviewedToday}</strong> {t.home.reviewed}</span>
-            </div>
-            <div className="button-row">
-                <button className="tiny-button" onClick={() => setEditingDeck(summary.deck)}>{t.common.edit}</button>
-                <button className="tiny-button danger" onClick={() => deleteDeck(summary.deck)}>{t.common.delete}</button>
-            </div>
-          </article>
-        ))}
+      <div className="deck-group-list">
+        {groupedSummaries.map(({ group, summaries: groupSummaries }) => {
+          const groupKey = group?.id ?? 'ungrouped';
+          const expanded = query.trim() ? true : expandedGroups[groupKey] ?? true;
+          return (
+            <section className="deck-group" key={groupKey}>
+              <header className="deck-group-header">
+                <button
+                  className="deck-group-toggle"
+                  onClick={() => setExpandedGroups((state) => ({ ...state, [groupKey]: !expanded }))}
+                  aria-expanded={expanded}
+                >
+                  <span className="deck-group-chevron">{expanded ? '⌄' : '›'}</span>
+                  <span>{group?.name ?? 'Bez skupiny'}</span>
+                  <small>{groupSummaries.length} balíčků</small>
+                </button>
+                {group && (
+                  <div className="deck-group-actions">
+                    <button className="tiny-button" onClick={() => setEditingGroup(group)}>{t.common.edit}</button>
+                    <button className="tiny-button danger" onClick={() => void deleteGroup(group)}>{t.common.delete}</button>
+                  </div>
+                )}
+              </header>
+              {expanded && (
+                <div className="deck-grid">
+                  {groupSummaries.map((summary) => (
+                    <article className="deck-card" key={summary.deck.id}>
+                      <button className="deck-open" onClick={() => onOpenDeck(summary.deck.id)}>
+                        <span className="deck-title">{summary.deck.name}</span>
+                        {summary.deck.description && <span className="deck-description">{summary.deck.description}</span>}
+                      </button>
+                      <div className="metric-grid">
+                        <span><strong>{summary.cardCount}</strong> {t.home.cards}</span>
+                        <span><strong>{summary.dueCount}</strong> {t.common.today}</span>
+                        <span><strong>{summary.reviewedToday}</strong> {t.home.reviewed}</span>
+                      </div>
+                      <div className="button-row">
+                          <button className="tiny-button" onClick={() => setEditingDeck(summary.deck)}>{t.common.edit}</button>
+                          <button className="tiny-button danger" onClick={() => deleteDeck(summary.deck)}>{t.common.delete}</button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
 
       {customStudyOpen && (
@@ -270,12 +359,56 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
         <Modal title={editingDeck === 'new' ? t.home.newDeck : t.home.editDeck} onClose={() => setEditingDeck(undefined)}>
           <DeckForm
             deck={editingDeck === 'new' ? undefined : editingDeck}
+            groups={groups}
             onSubmit={saveDeck}
             onCancel={() => setEditingDeck(undefined)}
           />
         </Modal>
       )}
+
+      {editingGroup && (
+        <Modal title={editingGroup === 'new' ? 'Nová skupina' : 'Upravit skupinu'} onClose={() => setEditingGroup(undefined)}>
+          <DeckGroupForm
+            group={editingGroup === 'new' ? undefined : editingGroup}
+            onSubmit={saveGroup}
+            onCancel={() => setEditingGroup(undefined)}
+          />
+        </Modal>
+      )}
     </section>
+  );
+}
+
+function DeckGroupForm({ group, onSubmit, onCancel }: {
+  group?: DeckGroup;
+  onSubmit: (values: { name: string }) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(group?.name ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await onSubmit({ name });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="stack" onSubmit={handleSubmit}>
+      <label>
+        Název skupiny
+        <input value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
+      </label>
+      <div className="button-row">
+        <button className="primary-button" disabled={saving} type="submit">{saving ? t.common.saving : t.common.save}</button>
+        <button className="secondary-button" type="button" onClick={onCancel}>{t.common.cancel}</button>
+      </div>
+    </form>
   );
 }
 

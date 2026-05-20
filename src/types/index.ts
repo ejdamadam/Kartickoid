@@ -12,6 +12,14 @@ export interface Deck {
   id: EntityId;
   name: string;
   description: string;
+  groupId?: EntityId;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeckGroup {
+  id: EntityId;
+  name: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -111,14 +119,15 @@ export interface ExportMedia {
 }
 
 export interface BackupFile {
-  version?: 1 | 2 | 3;
-  schemaVersion?: 1 | 2 | 3;
+  version?: 1 | 2 | 3 | 4;
+  schemaVersion?: 1 | 2 | 3 | 4;
   appVersion?: string;
   exportDate?: string;
   exportId?: string;
   mediaIncludesBlobs?: boolean;
   mediaStorage?: 'json-base64' | 'zip-files';
   exportedAt: string;
+  deckGroups?: DeckGroup[];
   decks: Deck[];
   cards: Card[];
   media: ExportMedia[];

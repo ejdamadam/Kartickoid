@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../app/version';
 import { db } from '../db/database';
-import type { AppMeta, BackupFile, BackupHistoryEntry, Card, Deck, EntityId, ExportMedia, Media, ReviewLog } from '../types';
+import type { AppMeta, BackupFile, BackupHistoryEntry, Card, Deck, DeckGroup, EntityId, ExportMedia, Media, ReviewLog } from '../types';
 import { createId } from '../utils/id';
 import { nowIso } from '../utils/date';
 import JSZip from 'jszip';
@@ -38,18 +38,20 @@ export interface ImportBackupSummary {
 }
 
 type ParsedBackup = Required<Pick<BackupFile, 'schemaVersion' | 'decks' | 'cards' | 'media' | 'reviewLogs'>> & {
+  deckGroups: DeckGroup[];
   appMeta: AppMeta[];
   exportedAt: string;
 };
 
-const CURRENT_SCHEMA_VERSION = 3;
-const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2, 3]);
+const CURRENT_SCHEMA_VERSION = 4;
+const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2, 3, 4]);
 const MAX_BACKUP_HISTORY = 8;
 
 export async function exportDatabase(
   options: { includeMediaBlobs: boolean; onProgress?: (current: number, total: number, label?: string) => void } = { includeMediaBlobs: true }
 ): Promise<BackupFile> {
-  const [decks, cards, media, reviewLogs, appMeta] = await Promise.all([
+  const [deckGroups, decks, cards, media, reviewLogs, appMeta] = await Promise.all([
+    db.deckGroups.toArray(),
     db.decks.toArray(),
     db.cards.toArray(),
     db.media.toArray(),
@@ -95,6 +97,7 @@ export async function exportDatabase(
     exportedAt,
     mediaIncludesBlobs: options.includeMediaBlobs,
     mediaStorage: options.includeMediaBlobs ? 'json-base64' : 'zip-files',
+    deckGroups,
     decks,
     cards,
     media: exportedMedia,
@@ -138,6 +141,8 @@ export async function downloadDeckBackup(deckId: EntityId, deckName: string): Pr
     db.appMeta.toArray()
   ]);
   if (!deck) throw new Error('Balíček nebyl nalezen.');
+  const deckGroup = deck.groupId ? await db.deckGroups.get(deck.groupId) : undefined;
+  const deckGroups = deckGroup ? [deckGroup] : [];
 
   const cardIds = Array.from(new Set(cards.map((card) => card.id)));
   // Query media using cardId index for efficiency and correctness
@@ -168,6 +173,7 @@ export async function downloadDeckBackup(deckId: EntityId, deckName: string): Pr
     exportedAt,
     mediaIncludesBlobs: true,
     mediaStorage: 'json-base64',
+    deckGroups,
     decks: [deck],
     cards,
     media: exportedMedia,
@@ -225,8 +231,9 @@ export function formatImportSummary(result: ImportBackupSummary): string {
 async function softImport(parsed: ParsedBackup): Promise<ImportBackupSummary> {
   const summary = createSummary('soft', true);
 
-  await db.transaction('rw', [db.decks, db.cards, db.media, db.reviewLogs, db.appMeta], async () => {
-    const [localDecks, localCards, localMedia, localLogs, localMeta] = await Promise.all([
+  await db.transaction('rw', [db.deckGroups, db.decks, db.cards, db.media, db.reviewLogs, db.appMeta], async () => {
+    const [localGroups, localDecks, localCards, localMedia, localLogs, localMeta] = await Promise.all([
+      db.deckGroups.toArray(),
       db.decks.toArray(),
       db.cards.toArray(),
       db.media.toArray(),
@@ -236,6 +243,8 @@ async function softImport(parsed: ParsedBackup): Promise<ImportBackupSummary> {
 
     const deckById = new Map(localDecks.map((deck) => [deck.id, deck]));
     const deckByName = new Map(localDecks.map((deck) => [normalize(deck.name), deck]));
+    const groupById = new Map(localGroups.map((group) => [group.id, group]));
+    const groupByName = new Map(localGroups.map((group) => [normalize(group.name), group]));
     const cardById = new Map(localCards.map((card) => [card.id, card]));
     const cardByContent = new Map(localCards.map((card) => [cardFallbackKey(card.deckId, card.frontText, card.backText), card]));
     const mediaById = new Map(localMedia.map((item) => [item.id, item]));
@@ -244,15 +253,37 @@ async function softImport(parsed: ParsedBackup): Promise<ImportBackupSummary> {
     const logByFallback = new Map(localLogs.map((log) => [logFallbackKey(log), log]));
     const metaByKey = new Map(localMeta.map((item) => [item.key, item]));
     const deckMap = new Map<EntityId, EntityId>();
+    const groupMap = new Map<EntityId, EntityId>();
     const cardMap = new Map<EntityId, EntityId>();
     const mediaMap = new Map<EntityId, EntityId>();
 
+    for (const importedGroup of parsed.deckGroups) {
+      const existing = groupById.get(importedGroup.id) ?? groupByName.get(normalize(importedGroup.name));
+      if (!existing) {
+        await db.deckGroups.put(importedGroup);
+        groupById.set(importedGroup.id, importedGroup);
+        groupByName.set(normalize(importedGroup.name), importedGroup);
+        groupMap.set(importedGroup.id, importedGroup.id);
+        continue;
+      }
+
+      groupMap.set(importedGroup.id, existing.id);
+      if (isNewer(importedGroup.updatedAt, existing.updatedAt)) {
+        const nextGroup = { ...importedGroup, id: existing.id };
+        await db.deckGroups.put(nextGroup);
+        groupById.set(existing.id, nextGroup);
+        groupByName.set(normalize(nextGroup.name), nextGroup);
+      }
+    }
+
     for (const importedDeck of parsed.decks) {
+      const mappedGroupId = importedDeck.groupId ? groupMap.get(importedDeck.groupId) ?? importedDeck.groupId : undefined;
       const existing = deckById.get(importedDeck.id) ?? deckByName.get(normalize(importedDeck.name));
       if (!existing) {
-        await db.decks.put(importedDeck);
-        deckById.set(importedDeck.id, importedDeck);
-        deckByName.set(normalize(importedDeck.name), importedDeck);
+        const nextDeck = { ...importedDeck, groupId: mappedGroupId };
+        await db.decks.put(nextDeck);
+        deckById.set(nextDeck.id, nextDeck);
+        deckByName.set(normalize(nextDeck.name), nextDeck);
         deckMap.set(importedDeck.id, importedDeck.id);
         summary.decksAdded += 1;
         continue;
@@ -261,7 +292,7 @@ async function softImport(parsed: ParsedBackup): Promise<ImportBackupSummary> {
       deckMap.set(importedDeck.id, existing.id);
       if (existing.id !== importedDeck.id) summary.duplicates += 1;
       if (isNewer(importedDeck.updatedAt, existing.updatedAt)) {
-        const nextDeck = { ...importedDeck, id: existing.id };
+        const nextDeck = { ...importedDeck, id: existing.id, groupId: mappedGroupId };
         await db.decks.put(nextDeck);
         deckById.set(existing.id, nextDeck);
         deckByName.set(normalize(nextDeck.name), nextDeck);
@@ -392,22 +423,31 @@ async function softImport(parsed: ParsedBackup): Promise<ImportBackupSummary> {
 async function hardImport(parsed: ParsedBackup, importSettings: boolean): Promise<ImportBackupSummary> {
   const summary = createSummary('hard', importSettings);
 
-  await db.transaction('rw', [db.decks, db.cards, db.media, db.reviewLogs, db.appMeta], async () => {
-    const [existingDeckIds, existingCardIds, existingMediaIds, existingLogIds] = await Promise.all([
+  await db.transaction('rw', [db.deckGroups, db.decks, db.cards, db.media, db.reviewLogs, db.appMeta], async () => {
+    const [existingGroupIds, existingDeckIds, existingCardIds, existingMediaIds, existingLogIds] = await Promise.all([
+      db.deckGroups.toCollection().primaryKeys(),
       db.decks.toCollection().primaryKeys(),
       db.cards.toCollection().primaryKeys(),
       db.media.toCollection().primaryKeys(),
       db.reviewLogs.toCollection().primaryKeys()
     ]);
 
+    const groupMap = makeIdMap(parsed.deckGroups.map((group) => group.id), new Set(existingGroupIds as string[]), 'group', summary);
     const deckMap = makeIdMap(parsed.decks.map((deck) => deck.id), new Set(existingDeckIds as string[]), 'deck', summary);
     const cardMap = makeIdMap(parsed.cards.map((card) => card.id), new Set(existingCardIds as string[]), 'card', summary);
     const mediaMap = makeIdMap(parsed.media.map((item) => item.id), new Set(existingMediaIds as string[]), 'media', summary);
     const logMap = makeIdMap(parsed.reviewLogs.map((log) => log.id), new Set(existingLogIds as string[]), 'log', summary);
 
+    const deckGroups = parsed.deckGroups.map((group) => ({
+      ...group,
+      id: groupMap.get(group.id) ?? group.id,
+      updatedAt: group.updatedAt || nowIso()
+    }));
+
     const decks = parsed.decks.map((deck) => ({
       ...deck,
       id: deckMap.get(deck.id) ?? deck.id,
+      groupId: deck.groupId ? groupMap.get(deck.groupId) ?? deck.groupId : undefined,
       updatedAt: deck.updatedAt || nowIso()
     }));
 
@@ -434,6 +474,7 @@ async function hardImport(parsed: ParsedBackup, importSettings: boolean): Promis
       deckId: deckMap.get(log.deckId) ?? log.deckId
     }));
 
+    await db.deckGroups.bulkAdd(deckGroups);
     await db.decks.bulkAdd(decks);
     await db.cards.bulkAdd(cards);
     await db.media.bulkAdd(media);
@@ -464,19 +505,22 @@ async function resetImport(parsed: ParsedBackup, createSafetySnapshot: boolean):
     summary.safetySnapshotCreated = true;
   }
 
+  const deckGroups = parsed.deckGroups.map((group) => ({ ...group, updatedAt: group.updatedAt || nowIso() }));
   const decks = parsed.decks.map((deck) => ({ ...deck, updatedAt: deck.updatedAt || nowIso() }));
   const cards = parsed.cards.map((card) => ({ ...card, imageIds: card.imageIds ?? [], tags: card.tags ?? [], updatedAt: card.updatedAt || nowIso() }));
   const media = parsed.media.map((item) => toMedia(item, item.cardId, item.deckId, item.id));
   const reviewLogs = parsed.reviewLogs.map((log) => ({ ...log }));
 
-  await db.transaction('rw', [db.decks, db.cards, db.media, db.reviewLogs, db.appMeta], async () => {
+  await db.transaction('rw', [db.deckGroups, db.decks, db.cards, db.media, db.reviewLogs, db.appMeta], async () => {
     await Promise.all([
+      db.deckGroups.clear(),
       db.decks.clear(),
       db.cards.clear(),
       db.media.clear(),
       db.reviewLogs.clear(),
       db.appMeta.clear()
     ]);
+    await db.deckGroups.bulkPut(deckGroups);
     await db.decks.bulkPut(decks);
     await db.cards.bulkPut(cards);
     await db.media.bulkPut(media);
@@ -567,14 +611,30 @@ function validateBackup(value: BackupFile): ParsedBackup {
   }
 
   const deckIds = new Set<string>();
+  const groupIds = new Set<string>();
   const cardIds = new Set<string>();
   const mediaIds = new Set<string>();
   const logIds = new Set<string>();
+  const deckGroups = Array.isArray(value.deckGroups)
+    ? value.deckGroups.map((group) => ({ ...group, id: group.id || createId('group') }))
+    : [];
+
+  deckGroups.forEach((group) => {
+    if (!group.name || !group.createdAt || !group.updatedAt) {
+      throw new Error('Záloha obsahuje neplatnou skupinu balíčků.');
+    }
+    if (groupIds.has(group.id)) throw new Error('Záloha obsahuje duplicitní ID skupiny balíčků.');
+    groupIds.add(group.id);
+  });
+
   const decks = value.decks.map((deck) => ({ ...deck, id: deck.id || createId('deck') }));
 
   decks.forEach((deck) => {
     if (!deck.name || !deck.createdAt || !deck.updatedAt) {
       throw new Error('Záloha obsahuje neplatnou sadu.');
+    }
+    if (deck.groupId && !groupIds.has(deck.groupId)) {
+      deck.groupId = undefined;
     }
     if (deckIds.has(deck.id)) throw new Error('Záloha obsahuje duplicitní ID sady.');
     deckIds.add(deck.id);
@@ -632,8 +692,9 @@ function validateBackup(value: BackupFile): ParsedBackup {
   const appMeta = Array.isArray(value.appMeta) ? value.appMeta.filter((item) => item.key && item.updatedAt) : [];
 
   return {
-    schemaVersion: schemaVersion as 1 | 2 | 3,
+    schemaVersion: schemaVersion as 1 | 2 | 3 | 4,
     exportedAt: value.exportDate ?? value.exportedAt ?? nowIso(),
+    deckGroups,
     decks,
     cards: cards.map((card) => ({ ...card, imageIds: card.imageIds ?? [], tags: card.tags ?? [] })),
     media,
@@ -810,7 +871,8 @@ async function createBackupHistoryBlobEntry(
 }
 
 async function createBackupZipBlob(onProgress?: (current: number, total: number, label?: string) => void): Promise<{ blob: Blob; name: string }> {
-  const [decks, cards, reviewLogs, appMeta, mediaCount] = await Promise.all([
+  const [deckGroups, decks, cards, reviewLogs, appMeta, mediaCount] = await Promise.all([
+    db.deckGroups.toArray(),
     db.decks.toArray(),
     db.cards.toArray(),
     db.reviewLogs.toArray(),
@@ -858,6 +920,7 @@ async function createBackupZipBlob(onProgress?: (current: number, total: number,
     exportedAt,
     mediaIncludesBlobs: false,
     mediaStorage: 'zip-files',
+    deckGroups,
     decks,
     cards,
     media: exportedMedia,
@@ -933,7 +996,8 @@ export async function downloadBackupZipPart(
   totalParts: number,
   onProgress?: (current: number, total: number, label?: string) => void
 ): Promise<void> {
-  const [decks, cards, reviewLogs, appMeta] = await Promise.all([
+  const [deckGroups, decks, cards, reviewLogs, appMeta] = await Promise.all([
+    db.deckGroups.toArray(),
     db.decks.toArray(),
     db.cards.toArray(),
     db.reviewLogs.toArray(),
@@ -979,6 +1043,7 @@ export async function downloadBackupZipPart(
     exportedAt,
     mediaIncludesBlobs: false,
     mediaStorage: 'zip-files',
+    deckGroups,
     decks,
     cards,
     media: exportedMedia,

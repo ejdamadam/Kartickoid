@@ -55,6 +55,10 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
   const pendingScrollY = useRef<number | undefined>(undefined);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [deckId]);
+
+  useEffect(() => {
     let active = true;
     setLoading(true);
     setListReady(false);

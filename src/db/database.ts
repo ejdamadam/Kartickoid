@@ -1,11 +1,12 @@
 import Dexie, { type Table } from 'dexie';
-import type { AppMeta, BackupHistoryEntry, Card, Deck, DeckSummary, EntityId, Media, ReviewLog } from '../types';
+import type { AppMeta, BackupHistoryEntry, Card, Deck, DeckGroup, DeckSummary, EntityId, Media, ReviewLog } from '../types';
 import { DB_NAME, DB_VERSION } from './schema';
 import { createId } from '../utils/id';
 import { nowIso, startOfTodayIso } from '../utils/date';
 
 export class FlashcardDatabase extends Dexie {
   decks!: Table<Deck, EntityId>;
+  deckGroups!: Table<DeckGroup, EntityId>;
   cards!: Table<Card, EntityId>;
   media!: Table<Media, EntityId>;
   reviewLogs!: Table<ReviewLog, EntityId>;
@@ -24,7 +25,8 @@ export class FlashcardDatabase extends Dexie {
     });
 
     this.version(DB_VERSION).stores({
-      decks: 'id, updatedAt',
+      decks: 'id, groupId, updatedAt',
+      deckGroups: 'id, updatedAt',
       cards: 'id, deckId, dueAt, updatedAt, *tags',
       media: 'id, cardId',
       reviewLogs: 'id, cardId, deckId, reviewedAt',
@@ -48,6 +50,16 @@ export function createDeckInput(name: string, description: string): Deck {
     id: createId('deck'),
     name: name.trim(),
     description: description.trim(),
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+export function createDeckGroupInput(name: string): DeckGroup {
+  const timestamp = nowIso();
+  return {
+    id: createId('group'),
+    name: name.trim(),
     createdAt: timestamp,
     updatedAt: timestamp
   };

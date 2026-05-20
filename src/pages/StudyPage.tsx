@@ -295,6 +295,10 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
   const againOpacity = useTransform(x, [-100, -18], [1, 0]);
   const easyOpacity = useTransform(y, [-100, -18], [1, 0]);
   const hardOpacity = useTransform(y, [18, 100], [0, 1]);
+  const goodTintOpacity = useTransform(x, [20, 150], [0, 0.8]);
+  const againTintOpacity = useTransform(x, [-150, -20], [0.8, 0]);
+  const easyTintOpacity = useTransform(y, [-150, -20], [0.8, 0]);
+  const hardTintOpacity = useTransform(y, [20, 150], [0, 0.8]);
   const [isDismissing, setIsDismissing] = useState(false);
   const frontScrollRef = useRef<HTMLDivElement>(null);
   const backScrollRef = useRef<HTMLDivElement>(null);
@@ -444,6 +448,7 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
                 </div>
                 <span
                   className={`review-scroll-cue ${scrollState.front.overflow && !scrollState.front.atBottom ? 'is-visible' : ''}`}
+                  title="Obsah pokračuje níž"
                   aria-hidden="true"
                 />
               </div>
@@ -469,11 +474,16 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
                 </div>
                 <span
                   className={`review-scroll-cue ${scrollState.back.overflow && !scrollState.back.atBottom ? 'is-visible' : ''}`}
+                  title="Obsah pokračuje níž"
                   aria-hidden="true"
                 />
               </div>
             </div>
           </motion.div>
+          <motion.div className="swipe-card-tint good" style={{ opacity: goodTintOpacity }}>{t.study.good}</motion.div>
+          <motion.div className="swipe-card-tint again" style={{ opacity: againTintOpacity }}>{t.study.again}</motion.div>
+          <motion.div className="swipe-card-tint easy" style={{ opacity: easyTintOpacity }}>{t.study.easy}</motion.div>
+          <motion.div className="swipe-card-tint hard" style={{ opacity: hardTintOpacity }}>{t.study.hard}</motion.div>
         </div>
       </motion.div>
       {showHint && <p className="gesture-hint">{t.study.hint}</p>}
