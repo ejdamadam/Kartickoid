@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { animate, motion, useMotionValue, useTransform, type PanInfo, AnimatePresence } from 'framer-motion';
 import RichTextDisplay from '../components/RichTextDisplay';
 import CardMediaList from '../components/CardMediaList';
@@ -306,6 +306,7 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
     front: { overflow: false, atBottom: true },
     back: { overflow: false, atBottom: true }
   });
+  const touchStartRef = useRef<{ x: number; y: number; locked: boolean } | undefined>(undefined);
 
   useEffect(() => {
     setIsDismissing(false);
@@ -396,6 +397,37 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
     }
   }
 
+  function handleTouchStart(event: ReactTouchEvent<HTMLDivElement>) {
+    const interactiveTarget = (event.target as HTMLElement).closest('audio, button, .audio-shell');
+    if (interactiveTarget) {
+      touchStartRef.current = undefined;
+      return;
+    }
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, locked: false };
+  }
+
+  function handleTouchMove(event: ReactTouchEvent<HTMLDivElement>) {
+    const start = touchStartRef.current;
+    const touch = event.touches[0];
+    if (!start || !touch) return;
+
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    const primaryDrag = Math.abs(dx) > 14 || Math.abs(dy) > 14;
+
+    if (primaryDrag) {
+      start.locked = true;
+    }
+    if (start.locked && event.cancelable) {
+      event.preventDefault();
+    }
+  }
+
+  function handleTouchEnd() {
+    touchStartRef.current = undefined;
+  }
+
   function handleTap(event: any, info: any) {
     const interactiveTarget = event.target.closest('audio, button, .audio-shell');
     if (interactiveTarget) {
@@ -414,12 +446,18 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         whileTap={{ scale: 0.985 }}
         onTap={handleTap}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         onDragEnd={onDragEnd}
       >
+        {/*
         <motion.div className="swipe-indicator good" style={{ opacity: goodOpacity }}>{t.study.good}</motion.div>
         <motion.div className="swipe-indicator again" style={{ opacity: againOpacity }}>{t.study.again}</motion.div>
         <motion.div className="swipe-indicator easy" style={{ opacity: easyOpacity }}>{t.study.easy}</motion.div>
         <motion.div className="swipe-indicator hard" style={{ opacity: hardOpacity }}>{t.study.hard}</motion.div>
+        */}
 
         <div className="swipe-card">
           <motion.div

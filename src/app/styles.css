@@ -452,6 +452,20 @@ h2 {
   font-size: 1.35rem;
 }
 
+.icon-only-button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.icon-only-button span {
+  display: block;
+  transform: translateY(-2px);
+  letter-spacing: 0;
+}
+
 .tiny-button {
   min-height: 34px;
   background: #fffdf8;
@@ -485,6 +499,7 @@ h2 {
 .deck-group-list {
   display: grid;
   gap: 1rem;
+  margin-top: 1rem;
 }
 
 .deck-group {
@@ -536,6 +551,46 @@ h2 {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.4rem;
+}
+
+.folder-create-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border: 1px solid rgba(var(--primary-rgb), 0.12);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.58);
+  color: var(--text-muted);
+  padding: 0;
+}
+
+.folder-create-button:hover {
+  border-color: rgba(var(--primary-rgb), 0.24);
+  background: rgba(255, 253, 248, 0.92);
+  color: var(--primary-color);
+}
+
+.folder-icon {
+  position: relative;
+  width: 20px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+}
+
+.folder-icon::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: -7px;
+  width: 9px;
+  height: 6px;
+  border: 2px solid currentColor;
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
 }
 
 .deck-card,
@@ -652,8 +707,119 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0.85rem;
-  margin: 1rem 0 1.25rem;
+  margin: 1rem 0 0.75rem;
   align-items: end;
+}
+
+.deck-options-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.deck-options-popover {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  z-index: 12;
+  display: grid;
+  min-width: min(82vw, 320px);
+  border: 1px solid rgba(var(--primary-rgb), 0.14);
+  border-radius: 8px;
+  background: #fffdf8;
+  padding: 0.35rem;
+  box-shadow: 0 18px 42px rgba(var(--primary-rgb), 0.16);
+}
+
+.deck-options-popover button {
+  justify-content: flex-start;
+  min-height: 42px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary-color);
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  font-weight: 850;
+}
+
+.deck-options-popover button:hover {
+  background: var(--surface-muted);
+}
+
+.card-list-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin: 0 0 0.85rem;
+}
+
+.icon-action-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  border: 1px solid rgba(var(--primary-rgb), 0.14);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.82);
+  color: var(--primary-color);
+  padding: 0;
+}
+
+.icon-action-button:hover {
+  border-color: rgba(var(--primary-rgb), 0.26);
+  background: #fffdf8;
+  box-shadow: 0 10px 22px rgba(var(--primary-rgb), 0.09);
+}
+
+.plus-icon,
+.multi-plus-icon {
+  position: relative;
+  width: 18px;
+  height: 18px;
+}
+
+.plus-icon::before,
+.plus-icon::after,
+.multi-plus-icon::before,
+.multi-plus-icon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.plus-icon::before,
+.multi-plus-icon::before {
+  width: 16px;
+  height: 2px;
+}
+
+.plus-icon::after,
+.multi-plus-icon::after {
+  width: 2px;
+  height: 16px;
+}
+
+.multi-plus-icon {
+  transform: translate(3px, 1px);
+}
+
+.multi-plus-icon::before,
+.multi-plus-icon::after {
+  box-shadow: -7px -5px 0 -0.25px currentColor;
+}
+
+.multi-plus-icon::before {
+  box-shadow: -7px -5px 0 -0.25px currentColor;
+}
+
+.multi-plus-icon::after {
+  box-shadow: -7px -5px 0 -0.25px currentColor;
 }
 
 .star-filter-button {
@@ -978,11 +1144,11 @@ h2 {
 .review-scroll-cue {
   position: absolute;
   left: 50%;
-  bottom: 0.72rem;
-  width: 18px;
-  height: 18px;
+  bottom: 0.82rem;
+  width: 12px;
+  height: 12px;
   opacity: 0;
-  transform: translateX(-50%) translateY(-4px);
+  transform: translateX(-50%) translateY(-3px);
   transition: opacity 0.16s ease, transform 0.16s ease;
   pointer-events: none;
 }
@@ -990,9 +1156,9 @@ h2 {
 .review-scroll-cue::after {
   content: "";
   position: absolute;
-  inset: 3px;
-  border-right: 2px solid rgba(var(--primary-rgb), 0.76);
-  border-bottom: 2px solid rgba(var(--primary-rgb), 0.76);
+  inset: 2px;
+  border-right: 1.7px solid rgba(var(--primary-rgb), 0.62);
+  border-bottom: 1.7px solid rgba(var(--primary-rgb), 0.62);
   transform: rotate(45deg);
 }
 
@@ -1040,19 +1206,19 @@ h2 {
 }
 
 .swipe-card-tint.good {
-  background: rgba(39, 101, 84, 0.82);
+  background: rgba(22, 132, 92, 0.92);
 }
 
 .swipe-card-tint.again {
-  background: rgba(164, 63, 42, 0.84);
+  background: rgba(198, 48, 36, 0.93);
 }
 
 .swipe-card-tint.easy {
-  background: rgba(49, 90, 146, 0.84);
+  background: rgba(37, 99, 235, 0.91);
 }
 
 .swipe-card-tint.hard {
-  background: rgba(182, 106, 40, 0.84);
+  background: rgba(217, 119, 6, 0.93);
 }
 
 .swipe-indicator.good {
@@ -2016,6 +2182,21 @@ code {
     width: 100%;
   }
 
+  .toolbar > .deck-options-menu {
+    width: 44px;
+    align-self: flex-start;
+  }
+
+  .deck-options-popover {
+    left: 0;
+    right: auto;
+  }
+
+  .toolbar > .folder-create-button {
+    width: 44px;
+    align-self: flex-start;
+  }
+
   .deck-group-header {
     align-items: stretch;
     flex-direction: column;
@@ -2687,6 +2868,34 @@ code {
 [data-color-mode="dark"] .deck-group-chevron {
   background: rgba(30, 41, 59, 0.78);
   border-color: rgba(203, 213, 225, 0.18);
+}
+
+[data-color-mode="dark"] .folder-create-button {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: rgba(203, 213, 225, 0.16);
+  color: var(--text-muted);
+}
+
+[data-color-mode="dark"] .folder-create-button:hover {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(203, 213, 225, 0.28);
+  color: #f8fafc;
+}
+
+[data-color-mode="dark"] .deck-options-popover {
+  background: var(--surface-color);
+  border-color: rgba(203, 213, 225, 0.18);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+}
+
+[data-color-mode="dark"] .deck-options-popover button:hover,
+[data-color-mode="dark"] .icon-action-button:hover {
+  background: var(--surface-muted);
+}
+
+[data-color-mode="dark"] .icon-action-button {
+  background: rgba(23, 32, 51, 0.82);
+  border-color: rgba(203, 213, 225, 0.16);
 }
 
 [data-color-mode="dark"] .muted,

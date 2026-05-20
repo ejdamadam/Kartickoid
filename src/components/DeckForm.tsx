@@ -38,9 +38,9 @@ export default function DeckForm({ deck, groups = [], onSubmit, onCancel }: Deck
       </label>
       {groups.length > 0 && (
         <label>
-          Skupina
+          Složka
           <select value={groupId} onChange={(event) => setGroupId(event.target.value)}>
-            <option value="">Bez skupiny</option>
+            <option value="">Mimo složky</option>
             {groups.map((group) => (
               <option key={group.id} value={group.id}>{group.name}</option>
             ))}

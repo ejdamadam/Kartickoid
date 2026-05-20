@@ -633,10 +633,10 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         <details className="onedrive-panel onedrive-collapsible">
           <summary className="section-title">
             <h3>OneDrive zálohy</h3>
-            <span>{oneDriveSettings?.connected ? 'připojeno · experimentální' : 'experimentální'}</span>
+            <span>{oneDriveSettings?.connected ? 'připojeno · ve vývoji' : 've vývoji'}</span>
           </summary>
           <p className="muted">
-            OneDrive je experimentální funkce a nemusí být plně stabilní ve všech prohlížečích nebo účtech. Zálohování používá aplikační složku Kartičkoid v OneDrive a vyžaduje vlastní Microsoft Entra Application (client) ID se scope Files.ReadWrite.AppFolder a redirect URI této aplikace.
+            OneDrive zálohy jsou ve vývoji jako doplňková cloudová možnost. Zálohování používá aplikační složku Kartičkoid v OneDrive a vyžaduje vlastní Microsoft Entra Application (client) ID se scope Files.ReadWrite.AppFolder a redirect URI této aplikace.
           </p>
           <details className="settings-help-box">
             <summary>Jak OneDrive zprovoznit</summary>

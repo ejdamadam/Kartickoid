@@ -39,6 +39,8 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
   const [editingCard, setEditingCard] = useState<EditableCard>();
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [bulkAddMode, setBulkAddMode] = useState<BulkAddMode>('visual');
+  const [deckMenuOpen, setDeckMenuOpen] = useState(false);
+  const [exportFormatOpen, setExportFormatOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [starFilter, setStarFilter] = useState<'all' | 'starred' | 'unstarred'>('all');
@@ -376,6 +378,15 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
     }
   }
 
+  async function exportDeckFormat(format: 'backup' | 'csv') {
+    setExportFormatOpen(false);
+    if (format === 'backup') {
+      await exportDeck();
+    } else {
+      await exportCsv();
+    }
+  }
+
   async function duplicateDeck() {
     if (!deck) return;
     try {
@@ -492,12 +503,52 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
           <button className="secondary-button" onClick={onMatch}>Match</button>
           <button className="secondary-button" onClick={onTest}>Test</button>
           <button className="secondary-button" onClick={onGame}>Rychlá odpověď</button>
-          <button className="secondary-button" onClick={() => setEditingCard('new')}>{t.deck.newCard}</button>
-          <button className="secondary-button" onClick={() => setBulkAddOpen(true)}>Přidat více kartiček</button>
-          <button className="secondary-button" onClick={exportCsv}>{t.deck.csvExport}</button>
-          <button className="secondary-button" onClick={exportDeck}>{t.deck.exportDeck}</button>
-          <button className="secondary-button" onClick={flipAllSides}>Prohodit celý balíček</button>
-          <button className="secondary-button" onClick={duplicateDeck}>{t.deck.duplicate}</button>
+          <div className="deck-options-menu">
+            <button
+              className="secondary-button icon-only-button"
+              type="button"
+              onClick={() => setDeckMenuOpen((open) => !open)}
+              aria-label="Další možnosti balíčku"
+              title="Další možnosti balíčku"
+              aria-expanded={deckMenuOpen}
+            >
+              <span aria-hidden="true">•••</span>
+            </button>
+            {deckMenuOpen && (
+              <div className="deck-options-popover" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setDeckMenuOpen(false);
+                    void flipAllSides();
+                  }}
+                >
+                  Prohodit strany kartiček v celém balíčku
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setDeckMenuOpen(false);
+                    void duplicateDeck();
+                  }}
+                >
+                  {t.deck.duplicate}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setDeckMenuOpen(false);
+                    setExportFormatOpen(true);
+                  }}
+                >
+                  {t.deck.exportDeck}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -584,6 +635,27 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="card-list-actions" aria-label="Přidání kartiček">
+            <button
+              className="icon-action-button"
+              type="button"
+              onClick={() => setEditingCard('new')}
+              aria-label={t.deck.newCard}
+              title={t.deck.newCard}
+            >
+              <span className="plus-icon" aria-hidden="true" />
+            </button>
+            <button
+              className="icon-action-button"
+              type="button"
+              onClick={() => setBulkAddOpen(true)}
+              aria-label="Přidat více kartiček"
+              title="Přidat více kartiček"
+            >
+              <span className="multi-plus-icon" aria-hidden="true" />
+            </button>
           </div>
 
           {!listReady ? (
@@ -734,6 +806,24 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
             ) : (
               <BulkEditor deckId={deckId} onCreate={bulkCreate} onCancel={() => setBulkAddOpen(false)} />
             )}
+          </div>
+        </Modal>
+      )}
+
+      {exportFormatOpen && (
+        <Modal title="Exportovat balíček" onClose={() => setExportFormatOpen(false)}>
+          <div className="stack">
+            <p className="muted">Vyberte formát exportu až podle toho, co s balíčkem potřebujete udělat.</p>
+            <div className="choice-grid">
+              <button className="choice-button" type="button" onClick={() => void exportDeckFormat('backup')}>
+                <strong>Záloha balíčku</strong>
+                <small>JSON soubor pro pozdější obnovu v Kartičkoidu.</small>
+              </button>
+              <button className="choice-button" type="button" onClick={() => void exportDeckFormat('csv')}>
+                <strong>CSV export kartiček</strong>
+                <small>Tabulkový export textů kartiček pro další zpracování.</small>
+              </button>
+            </div>
           </div>
         </Modal>
       )}

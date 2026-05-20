@@ -148,7 +148,7 @@ Ribozom :: Místo tvorby bílkovin :: biologie,buňka`}</code></pre>
 
         <section className="panel">
           <h2>OneDrive</h2>
-          <p>OneDrive je experimentální funkce pro doplňkové cloudové zálohování. V Nastavení je ve výchozím stavu sbalená, aby nepřekážela běžným volbám. Může pomoct, ale nemusí být plně stabilní ani vhodná jako jediná kopie dat. Pro jistou obnovu používejte pravidelně ZIP zálohu.</p>
+          <p>OneDrive zálohy jsou ve vývoji jako doplňková cloudová možnost. V Nastavení jsou ve výchozím stavu sbalené, aby nepřekážely běžným volbám. Pro jistou obnovu používejte pravidelně ZIP zálohu.</p>
         </section>
 
         <section className="panel">
