@@ -498,21 +498,21 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
           <h1>{deck?.name}</h1>
           {deck?.description && <p className="lead">{deck.description}</p>}
         </div>
-        <div className="toolbar">
+        <div className="toolbar deck-detail-toolbar">
           <button className="primary-button" onClick={startStudy}>{t.deck.study}</button>
           <button className="secondary-button" onClick={onMatch}>Match</button>
           <button className="secondary-button" onClick={onTest}>Test</button>
           <button className="secondary-button" onClick={onGame}>Rychlá odpověď</button>
           <div className="deck-options-menu">
             <button
-              className="secondary-button icon-only-button"
+              className="secondary-button icon-only-button deck-options-trigger"
               type="button"
               onClick={() => setDeckMenuOpen((open) => !open)}
               aria-label="Další možnosti balíčku"
               title="Další možnosti balíčku"
               aria-expanded={deckMenuOpen}
             >
-              <span aria-hidden="true">•••</span>
+              <span aria-hidden="true">⋯</span>
             </button>
             {deckMenuOpen && (
               <div className="deck-options-popover" role="menu">
@@ -654,7 +654,7 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
               aria-label="Přidat více kartiček"
               title="Přidat více kartiček"
             >
-              <span className="multi-plus-icon" aria-hidden="true" />
+              <span className="stack-plus-icon" aria-hidden="true" />
             </button>
           </div>
 

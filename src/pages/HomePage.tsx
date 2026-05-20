@@ -202,9 +202,6 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
           <h1>{t.home.title}</h1>
         </div>
         <div className="toolbar">
-          <button className="folder-create-button" onClick={() => setEditingGroup('new')} aria-label="Nová složka" title="Nová složka">
-            <span className="folder-icon" aria-hidden="true" />
-          </button>
           <button className="secondary-button" onClick={() => setCustomStudyOpen(true)}>Procvičit více sad</button>
           <button className="primary-button" onClick={() => setEditingDeck('new')}>{t.home.newDeck}</button>
         </div>
@@ -257,6 +254,9 @@ export default function HomePage({ refreshKey, onOpenDeck, onChanged, onCustomSt
 
       <div className="home-search">
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.home.searchPlaceholder} />
+        <button className="folder-create-button" onClick={() => setEditingGroup('new')} aria-label="Nová složka" title="Nová složka">
+          <span className="folder-icon" aria-hidden="true" />
+        </button>
       </div>
 
       {homeDeckLayout.ungrouped.length > 0 && (
@@ -392,6 +392,14 @@ function DeckCard({ summary, onOpen, onEdit, onDelete }: {
 }) {
   return (
     <article className="deck-card">
+      <div className="deck-card-actions" aria-label="Akce balíčku">
+        <button className="round-icon-button" type="button" onClick={onEdit} aria-label={`Upravit balíček ${summary.deck.name}`} title={t.common.edit}>
+          <span className="pencil-icon" aria-hidden="true" />
+        </button>
+        <button className="round-icon-button danger" type="button" onClick={onDelete} aria-label={`Smazat balíček ${summary.deck.name}`} title={t.common.delete}>
+          <span className="trash-icon" aria-hidden="true" />
+        </button>
+      </div>
       <button className="deck-open" onClick={onOpen}>
         <span className="deck-title">{summary.deck.name}</span>
         {summary.deck.description && <span className="deck-description">{summary.deck.description}</span>}
@@ -400,10 +408,6 @@ function DeckCard({ summary, onOpen, onEdit, onDelete }: {
         <span><strong>{summary.cardCount}</strong> {t.home.cards}</span>
         <span><strong>{summary.dueCount}</strong> {t.common.today}</span>
         <span><strong>{summary.reviewedToday}</strong> {t.home.reviewed}</span>
-      </div>
-      <div className="button-row">
-        <button className="tiny-button" onClick={onEdit}>{t.common.edit}</button>
-        <button className="tiny-button danger" onClick={onDelete}>{t.common.delete}</button>
       </div>
     </article>
   );

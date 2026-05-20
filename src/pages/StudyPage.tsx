@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { animate, motion, useMotionValue, useTransform, type PanInfo, AnimatePresence } from 'framer-motion';
 import RichTextDisplay from '../components/RichTextDisplay';
 import CardMediaList from '../components/CardMediaList';
@@ -291,14 +291,14 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-220, 0, 220], [-10, 0, 10]);
-  const goodOpacity = useTransform(x, [18, 100], [0, 1]);
-  const againOpacity = useTransform(x, [-100, -18], [1, 0]);
-  const easyOpacity = useTransform(y, [-100, -18], [1, 0]);
-  const hardOpacity = useTransform(y, [18, 100], [0, 1]);
-  const goodTintOpacity = useTransform(x, [20, 150], [0, 0.8]);
-  const againTintOpacity = useTransform(x, [-150, -20], [0.8, 0]);
-  const easyTintOpacity = useTransform(y, [-150, -20], [0.8, 0]);
-  const hardTintOpacity = useTransform(y, [20, 150], [0, 0.8]);
+  const goodOpacity = useTransform(x, [10, 76], [0, 1]);
+  const againOpacity = useTransform(x, [-76, -10], [1, 0]);
+  const easyOpacity = useTransform(y, [-76, -10], [1, 0]);
+  const hardOpacity = useTransform(y, [10, 76], [0, 1]);
+  const goodTintOpacity = useTransform(x, [8, 95], [0, 0.92]);
+  const againTintOpacity = useTransform(x, [-95, -8], [0.92, 0]);
+  const easyTintOpacity = useTransform(y, [-95, -8], [0.92, 0]);
+  const hardTintOpacity = useTransform(y, [8, 95], [0, 0.92]);
   const [isDismissing, setIsDismissing] = useState(false);
   const frontScrollRef = useRef<HTMLDivElement>(null);
   const backScrollRef = useRef<HTMLDivElement>(null);
@@ -306,7 +306,8 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
     front: { overflow: false, atBottom: true },
     back: { overflow: false, atBottom: true }
   });
-  const touchStartRef = useRef<{ x: number; y: number; locked: boolean } | undefined>(undefined);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number; locked: boolean; scrollEl?: HTMLDivElement } | undefined>(undefined);
 
   useEffect(() => {
     setIsDismissing(false);
@@ -397,36 +398,72 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
     }
   }
 
-  function handleTouchStart(event: ReactTouchEvent<HTMLDivElement>) {
-    const interactiveTarget = (event.target as HTMLElement).closest('audio, button, .audio-shell');
-    if (interactiveTarget) {
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    const clearTouchLock = () => {
       touchStartRef.current = undefined;
-      return;
-    }
-    const touch = event.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY, locked: false };
-  }
+      document.body.classList.remove('card-swipe-active');
+    };
 
-  function handleTouchMove(event: ReactTouchEvent<HTMLDivElement>) {
-    const start = touchStartRef.current;
-    const touch = event.touches[0];
-    if (!start || !touch) return;
+    const handleNativeTouchStart = (event: TouchEvent) => {
+      const target = event.target as HTMLElement | null;
+      const interactiveTarget = target?.closest('audio, button, input, textarea, select, .audio-shell');
+      if (interactiveTarget || isDismissing) {
+        touchStartRef.current = undefined;
+        return;
+      }
+      const touch = event.touches[0];
+      if (!touch) return;
+      const scrollEl = target?.closest('.review-scroll') as HTMLDivElement | null;
+      const hasScrollableContent = scrollEl && scrollEl.scrollHeight > scrollEl.clientHeight + 2;
+      touchStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        locked: false,
+        scrollEl: hasScrollableContent ? scrollEl : undefined
+      };
+    };
 
-    const dx = touch.clientX - start.x;
-    const dy = touch.clientY - start.y;
-    const primaryDrag = Math.abs(dx) > 14 || Math.abs(dy) > 14;
+    const handleNativeTouchMove = (event: TouchEvent) => {
+      const start = touchStartRef.current;
+      const touch = event.touches[0];
+      if (!start || !touch) return;
 
-    if (primaryDrag) {
-      start.locked = true;
-    }
-    if (start.locked && event.cancelable) {
-      event.preventDefault();
-    }
-  }
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      const movedEnough = Math.abs(dx) > 7 || Math.abs(dy) > 7;
+      const vertical = Math.abs(dy) >= Math.abs(dx);
 
-  function handleTouchEnd() {
-    touchStartRef.current = undefined;
-  }
+      if (movedEnough && start.scrollEl && vertical && canScrollReviewContent(start.scrollEl, dy)) {
+        return;
+      }
+
+      if (movedEnough) {
+        start.locked = true;
+        document.body.classList.add('card-swipe-active');
+      }
+
+      if (start.locked) {
+        event.stopPropagation();
+        if (event.cancelable) event.preventDefault();
+      }
+    };
+
+    shell.addEventListener('touchstart', handleNativeTouchStart, { passive: true });
+    shell.addEventListener('touchmove', handleNativeTouchMove, { passive: false });
+    shell.addEventListener('touchend', clearTouchLock);
+    shell.addEventListener('touchcancel', clearTouchLock);
+
+    return () => {
+      shell.removeEventListener('touchstart', handleNativeTouchStart);
+      shell.removeEventListener('touchmove', handleNativeTouchMove);
+      shell.removeEventListener('touchend', clearTouchLock);
+      shell.removeEventListener('touchcancel', clearTouchLock);
+      clearTouchLock();
+    };
+  }, [isDismissing]);
 
   function handleTap(event: any, info: any) {
     const interactiveTarget = event.target.closest('audio, button, .audio-shell');
@@ -439,17 +476,15 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
   return (
     <div className="learning-shell">
       <motion.div
+        ref={shellRef}
         className={`swipe-card-shell ${revealed ? 'is-flipped' : ''}`}
         style={{ x, y, rotate }}
         drag={!isDismissing}
+        dragDirectionLock={false}
         dragElastic={0.22}
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         whileTap={{ scale: 0.985 }}
         onTap={handleTap}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
         onDragEnd={onDragEnd}
       >
         {/*
@@ -527,6 +562,16 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
       {showHint && <p className="gesture-hint">{t.study.hint}</p>}
     </div>
   );
+}
+
+function canScrollReviewContent(element: HTMLDivElement, touchDeltaY: number) {
+  if (touchDeltaY < 0) {
+    return element.scrollTop + element.clientHeight < element.scrollHeight - 2;
+  }
+  if (touchDeltaY > 0) {
+    return element.scrollTop > 2;
+  }
+  return false;
 }
 
 function CardToolbar({ starred, canGoPrevious, onPrevious, onToggleStarred }: {

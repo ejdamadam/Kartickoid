@@ -125,7 +125,7 @@ export default function App() {
   });
 
   return (
-    <div className="app-shell" {...gestureHandlers}>
+    <div className={`app-shell ${route.name === 'study' ? 'study-mode' : ''}`} {...gestureHandlers}>
       <AppDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
