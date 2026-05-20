@@ -1544,6 +1544,38 @@ body.card-swipe-active {
   align-content: start;
 }
 
+.practice-side-control {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 520px;
+}
+
+.practice-side-toggle {
+  margin-bottom: 0;
+}
+
+.control-label {
+  color: #59615d;
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.inline-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #59615d;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.inline-toggle input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: var(--primary-color);
+}
+
 .compact-select {
   display: inline-flex;
   flex-direction: column;
@@ -3156,6 +3188,8 @@ code {
 [data-color-mode="dark"] .card-stats,
 [data-color-mode="dark"] .text-button,
 [data-color-mode="dark"] label,
+[data-color-mode="dark"] .control-label,
+[data-color-mode="dark"] .inline-toggle,
 [data-color-mode="dark"] .study-header-compact h1,
 [data-color-mode="dark"] .section-title span {
   color: var(--text-soft);

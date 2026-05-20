@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import BulkEditor from '../components/BulkEditor';
 import CardForm, { type CardFormValues } from '../components/CardForm';
 import CardMediaList from '../components/CardMediaList';
@@ -20,7 +20,7 @@ interface DeckPageProps {
   deckId: string;
   refreshKey: number;
   onBack: () => void;
-  onStudy: (options?: { source?: StudySessionSource; limit?: number; order?: 'default' | 'random' }) => void;
+  onStudy: (options?: { source?: StudySessionSource; limit?: number; order?: 'default' | 'random'; firstSide?: CardSide; applySideToTest?: boolean }) => void;
   onMatch: () => void;
   onTest: () => void;
   onGame: () => void;
@@ -30,6 +30,12 @@ interface DeckPageProps {
 type EditableCard = Card | 'new';
 type DeckStudySource = Extract<StudySessionSource, 'all' | 'lapsed' | 'mistakes' | 'new' | 'due'>;
 type BulkAddMode = 'visual' | 'raw';
+type DeckPracticePreferences = {
+  firstSide?: CardSide;
+  applySideToTest?: boolean;
+};
+
+const practicePreferencesKey = (deckId: string) => `kartickoid:deck:${deckId}:practice-preferences`;
 
 export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch, onTest, onGame, onChanged }: DeckPageProps) {
   const [deck, setDeck] = useState<Deck>();
@@ -54,11 +60,48 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
   const [studySource, setStudySource] = useState<DeckStudySource>('all');
   const [studyLimit, setStudyLimit] = useState(0);
   const [studyOrder, setStudyOrder] = useState<'default' | 'random'>('default');
+  const [studyFirstSide, setStudyFirstSide] = useState<CardSide>('front');
+  const [applySideToTest, setApplySideToTest] = useState(false);
+  const [studyPreferencesDeckId, setStudyPreferencesDeckId] = useState<string>();
   const pendingScrollY = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [deckId]);
+
+  useEffect(() => {
+    try {
+      const rawPreferences = localStorage.getItem(practicePreferencesKey(deckId));
+      if (!rawPreferences) {
+        setStudyFirstSide('front');
+        setApplySideToTest(false);
+        setStudyPreferencesDeckId(deckId);
+        return;
+      }
+
+      const preferences = JSON.parse(rawPreferences) as DeckPracticePreferences;
+      setStudyFirstSide(preferences.firstSide === 'back' ? 'back' : 'front');
+      setApplySideToTest(preferences.applySideToTest === true);
+      setStudyPreferencesDeckId(deckId);
+    } catch {
+      setStudyFirstSide('front');
+      setApplySideToTest(false);
+      setStudyPreferencesDeckId(deckId);
+    }
+  }, [deckId]);
+
+  useEffect(() => {
+    if (studyPreferencesDeckId !== deckId) return;
+    try {
+      const preferences: DeckPracticePreferences = {
+        firstSide: studyFirstSide,
+        applySideToTest
+      };
+      localStorage.setItem(practicePreferencesKey(deckId), JSON.stringify(preferences));
+    } catch {
+      // Practice preferences are optional; the session can safely continue without persistence.
+    }
+  }, [deckId, studyPreferencesDeckId, studyFirstSide, applySideToTest]);
 
   useEffect(() => {
     let active = true;
@@ -475,7 +518,18 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
     }
 
     setError(undefined);
-    onStudy({ source: studySource, limit: studyLimit, order: studyOrder });
+    onStudy({ source: studySource, limit: studyLimit, order: studyOrder, firstSide: studyFirstSide, applySideToTest });
+  }
+
+  function handleStudyFirstSideKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === 'ArrowLeft' || event.key === 'Home') {
+      event.preventDefault();
+      setStudyFirstSide('front');
+    }
+    if (event.key === 'ArrowRight' || event.key === 'End') {
+      event.preventDefault();
+      setStudyFirstSide('back');
+    }
   }
 
   if (!deck && !loading) {
@@ -596,6 +650,39 @@ export default function DeckPage({ deckId, refreshKey, onBack, onStudy, onMatch,
               <option value="default">Výchozí</option>
               <option value="random">Náhodné</option>
             </select>
+          </label>
+        </div>
+        <div className="practice-side-control">
+          <span className="control-label" id="first-practice-side-label">První zobrazovaná strana</span>
+          <div className="segmented two-options practice-side-toggle" role="radiogroup" aria-labelledby="first-practice-side-label">
+            <button
+              className={studyFirstSide === 'front' ? 'active' : ''}
+              type="button"
+              role="radio"
+              aria-checked={studyFirstSide === 'front'}
+              onClick={() => setStudyFirstSide('front')}
+              onKeyDown={handleStudyFirstSideKeyDown}
+            >
+              Přední strana
+            </button>
+            <button
+              className={studyFirstSide === 'back' ? 'active' : ''}
+              type="button"
+              role="radio"
+              aria-checked={studyFirstSide === 'back'}
+              onClick={() => setStudyFirstSide('back')}
+              onKeyDown={handleStudyFirstSideKeyDown}
+            >
+              Zadní strana
+            </button>
+          </div>
+          <label className="inline-toggle practice-test-toggle">
+            <input
+              type="checkbox"
+              checked={applySideToTest}
+              onChange={(event) => setApplySideToTest(event.target.checked)}
+            />
+            <span>Aplikovat i na Test</span>
           </label>
         </div>
       </section>

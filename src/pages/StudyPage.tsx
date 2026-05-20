@@ -5,7 +5,7 @@ import CardMediaList from '../components/CardMediaList';
 import { db } from '../db/database';
 import { scheduleCard } from '../services/scheduler';
 import { loadStudyCards, type StudyFilter } from '../services/studySessions';
-import type { Card, Deck, Media, Rating, StudyMode, StudySessionSource } from '../types';
+import type { Card, CardSide, Deck, Media, Rating, StudyMode, StudySessionSource } from '../types';
 import { compareFuzzy, type FuzzyResult } from '../utils/fuzzy';
 import { createId } from '../utils/id';
 import { shuffle, takeRandom } from '../utils/random';
@@ -17,6 +17,8 @@ interface StudyPageProps {
   initialSource?: StudySessionSource;
   initialLimit?: number;
   initialOrder?: 'default' | 'random';
+  initialFirstSide?: CardSide;
+  initialApplySideToTest?: boolean;
   onBack: () => void;
   onChanged: () => void;
 }
@@ -36,7 +38,17 @@ const sourceLabels: Record<StudySessionSource, string> = {
   new: 'Nové kartičky'
 };
 
-export default function StudyPage({ deckIds, tags, initialSource = 'due', initialLimit = 0, initialOrder = 'default', onBack, onChanged }: StudyPageProps) {
+export default function StudyPage({
+  deckIds,
+  tags,
+  initialSource = 'due',
+  initialLimit = 0,
+  initialOrder = 'default',
+  initialFirstSide = 'front',
+  initialApplySideToTest = false,
+  onBack,
+  onChanged
+}: StudyPageProps) {
   const [deckNames, setDeckNames] = useState<string[]>([]);
   const [allCards, setAllCards] = useState<Card[]>([]);
   const [queue, setQueue] = useState<Card[]>([]);
@@ -247,6 +259,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
                 <LearningCard
                   card={currentCard}
                   media={currentMedia}
+                  initialSide={initialFirstSide}
                   revealed={revealed}
                   showHint={index === 0 && completed === 0}
                   onFlip={() => setRevealed((value) => !value)}
@@ -261,6 +274,7 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
                   card={currentCard}
                   media={media}
                   allCards={allCards}
+                  questionSide={initialApplySideToTest ? initialFirstSide : 'front'}
                   onRate={rate}
                   onShowDetail={() => setRevealed(true)}
                   revealed={revealed}
@@ -281,9 +295,22 @@ export default function StudyPage({ deckIds, tags, initialSource = 'due', initia
   );
 }
 
-function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevious, canGoPrevious, onToggleStarred }: {
+function oppositeSide(side: CardSide): CardSide {
+  return side === 'front' ? 'back' : 'front';
+}
+
+function cardSideText(card: Card, side: CardSide) {
+  return side === 'front' ? card.frontText : card.backText;
+}
+
+function sideLabel(side: CardSide) {
+  return side === 'front' ? t.deck.frontSide : t.deck.backSide;
+}
+
+function LearningCard({ card, media, initialSide, revealed, showHint, onFlip, onRate, onPrevious, canGoPrevious, onToggleStarred }: {
   card: Card;
   media: Media[];
+  initialSide: CardSide;
   revealed: boolean;
   showHint: boolean;
   onFlip: () => void;
@@ -312,6 +339,8 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
   });
   const shellRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number; locked: boolean; scrollEl?: HTMLDivElement } | undefined>(undefined);
+  const frontFaceSide = initialSide;
+  const backFaceSide = oppositeSide(initialSide);
 
   useEffect(() => {
     setIsDismissing(false);
@@ -512,15 +541,15 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
                 onToggleStarred={onToggleStarred}
               />
               <div className="review-side centered">
-                <p className="side-label">{t.deck.frontSide}</p>
+                <p className="side-label">{sideLabel(frontFaceSide)}</p>
                 <div
                   className={`review-scroll ${scrollState.front.overflow ? 'has-overflow' : ''}`}
                   ref={frontScrollRef}
                   onScroll={() => handleReviewScroll('front')}
                 >
                   <div className="review-scroll-inner">
-                    <div className="review-text"><RichTextDisplay content={card.frontText} /></div>
-                    <CardMediaList media={media} side="front" hideMeta />
+                    <div className="review-text"><RichTextDisplay content={cardSideText(card, frontFaceSide)} /></div>
+                    <CardMediaList media={media} side={frontFaceSide} hideMeta />
                   </div>
                 </div>
                 <span
@@ -538,15 +567,15 @@ function LearningCard({ card, media, revealed, showHint, onFlip, onRate, onPrevi
                 onToggleStarred={onToggleStarred}
               />
               <div className="review-side centered">
-                <p className="side-label">{t.deck.backSide}</p>
+                <p className="side-label">{sideLabel(backFaceSide)}</p>
                 <div
                   className={`review-scroll ${scrollState.back.overflow ? 'has-overflow' : ''}`}
                   ref={backScrollRef}
                   onScroll={() => handleReviewScroll('back')}
                 >
                   <div className="review-scroll-inner">
-                    <div className="review-text"><RichTextDisplay content={card.backText} /></div>
-                    <CardMediaList media={media} side="back" hideMeta />
+                    <div className="review-text"><RichTextDisplay content={cardSideText(card, backFaceSide)} /></div>
+                    <CardMediaList media={media} side={backFaceSide} hideMeta />
                   </div>
                 </div>
                 <span
@@ -605,10 +634,11 @@ function CardToolbar({ starred, canGoPrevious, onPrevious, onToggleStarred }: {
   );
 }
 
-function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
+function TestMode({ card, media, allCards, questionSide, onRate, onShowDetail, revealed }: {
   card: Card;
   media: Media[];
   allCards: Card[];
+  questionSide: CardSide;
   onRate: (rating: Rating) => void;
   onShowDetail: () => void;
   revealed: boolean;
@@ -625,6 +655,7 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
 
   const answered = Boolean(selectedId);
   const correct = selectedId === card.id;
+  const answerSide = oppositeSide(questionSide);
   function handleSkip() {
     setSelectedId('SKIPPED');
   }
@@ -647,9 +678,9 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
   return (
     <article className="mode-panel">
       <div className="review-side">
-        <p className="side-label">{t.study.front}</p>
-        <div className="review-text compact"><RichTextDisplay content={card.frontText} /></div>
-        <CardMediaList media={media.filter((item) => item.cardId === card.id)} side="front" />
+        <p className="side-label">{sideLabel(questionSide)}</p>
+        <div className="review-text compact"><RichTextDisplay content={cardSideText(card, questionSide)} /></div>
+        <CardMediaList media={media.filter((item) => item.cardId === card.id)} side={questionSide} />
       </div>
       <div className="choice-grid">
         {options.map((option) => {
@@ -662,8 +693,8 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
               key={option.id}
               onClick={() => setSelectedId(option.id)}
             >
-              <div className="choice-text"><RichTextDisplay content={option.backText} /></div>
-              <CardMediaList media={optionMedia} side="back" />
+              <div className="choice-text"><RichTextDisplay content={cardSideText(option, answerSide)} /></div>
+              <CardMediaList media={optionMedia} side={answerSide} />
             </button>
           );
         })}
@@ -673,7 +704,7 @@ function TestMode({ card, media, allCards, onRate, onShowDetail, revealed }: {
           {correct ? praise : (
             <>
               <p>{encouragement}</p>
-              <RichTextDisplay content={card.backText} />
+              <RichTextDisplay content={cardSideText(card, answerSide)} />
             </>
           )}
         </motion.div>

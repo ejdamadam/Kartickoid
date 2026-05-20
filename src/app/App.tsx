@@ -19,12 +19,12 @@ import { db } from '../db/database';
 import { nowIso } from '../utils/date';
 import { t } from '../i18n';
 import { APP_VERSION } from './version';
-import type { StudySessionSource } from '../types';
+import type { CardSide, StudySessionSource } from '../types';
 
 type Route =
   | { name: 'home' }
   | { name: 'deck'; deckId: string }
-  | { name: 'study'; deckIds: string[]; tags: string[]; source?: StudySessionSource; limit?: number; order?: 'default' | 'random' }
+  | { name: 'study'; deckIds: string[]; tags: string[]; source?: StudySessionSource; limit?: number; order?: 'default' | 'random'; firstSide?: CardSide; applySideToTest?: boolean }
   | { name: 'match'; deckId: string }
   | { name: 'test'; deckId: string }
   | { name: 'game'; deckId: string }
@@ -223,6 +223,8 @@ export default function App() {
                 initialSource={route.source}
                 initialLimit={route.limit}
                 initialOrder={route.order}
+                initialFirstSide={route.firstSide}
+                initialApplySideToTest={route.applySideToTest}
                 onBack={goBack}
                 onChanged={refresh}
               />
